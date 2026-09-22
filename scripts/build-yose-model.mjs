@@ -48,6 +48,13 @@ const INTERNAL_TERMS = [
   'transversus thoracis', 'subcostal', 'levator ani', 'coccygeus'
 ]
 
+// For a training map we want the superficial abdominal wall, not every dissection layer.
+// These deep sheets obscure the rectus abdominis in BodyParts3D/Z-Anatomy.
+const DEEP_ABDOMINAL_TERMS = [
+  'internal oblique',
+  'transversus abdominis'
+]
+
 function normalizeName(value = '') {
   return value.toLowerCase().replace(/[_.-]+/g, ' ').replace(/\s+/g, ' ').trim()
 }
@@ -57,8 +64,8 @@ function classifyGroup(rawName) {
 
   // Deliberately strict. The analytics groups are not permission to relabel nearby muscles.
   if (n.includes('pectoralis')) return 'chest'
-  if (n.includes('rectus abdominis') || n.includes('transversus abdominis')) return 'abs'
-  if (n.includes('external oblique') || n.includes('internal oblique')) return 'obliques'
+  if (n.includes('rectus abdominis')) return 'abs'
+  if (n.includes('external oblique')) return 'obliques'
   if (n.includes('latissimus')) return 'lats'
   if (n.includes('trapezius')) return 'traps'
   if (n.includes('rhomboid')) return 'upper_back'
@@ -110,9 +117,7 @@ function anatomyLabel(rawName) {
     [/pectoralis major/, 'Pectoral mayor'],
     [/pectoralis minor/, 'Pectoral menor'],
     [/rectus abdominis/, 'Recto abdominal'],
-    [/transversus abdominis/, 'Transverso abdominal'],
     [/external oblique/, 'Oblicuo externo'],
-    [/internal oblique/, 'Oblicuo interno'],
     [/latissimus/, 'Dorsal ancho'],
     [/descending part.*trapezius/, 'Trapecio superior'],
     [/transverse part.*trapezius/, 'Trapecio medio'],
@@ -186,6 +191,7 @@ function removalReason(rawName) {
   const n = normalizeName(rawName)
   if (HEAD_NECK_TERMS.some(term => n.includes(term))) return 'head-neck'
   if (INTERNAL_TERMS.some(term => n.includes(term))) return 'internal'
+  if (DEEP_ABDOMINAL_TERMS.some(term => n.includes(term))) return 'deep-abdomen'
   return undefined
 }
 
@@ -241,6 +247,7 @@ const tendonMaterial = document.createMaterial('YOSE // TENDON')
 
 let removedHeadNeck = 0
 let removedInternal = 0
+let removedDeepAbdomen = 0
 let keptSelectable = 0
 let keptSupport = 0
 let keptTendon = 0
@@ -256,6 +263,7 @@ for (const node of [...root.listNodes()]) {
     node.dispose()
     if (reason === 'head-neck') removedHeadNeck++
     if (reason === 'internal') removedInternal++
+    if (reason === 'deep-abdomen') removedDeepAbdomen++
     continue
   }
 
@@ -301,6 +309,7 @@ console.log(`Source: ${(sourceSize / 1024 / 1024).toFixed(2)} MB`)
 console.log(`Output: ${(outputSize / 1024 / 1024).toFixed(2)} MB (${pct}% smaller)`)
 console.log(`Removed head/neck meshes: ${removedHeadNeck}`)
 console.log(`Removed internal meshes: ${removedInternal}`)
+console.log(`Removed deep abdominal layers: ${removedDeepAbdomen}`)
 console.log(`Selectable meshes: ${keptSelectable}`)
 console.log(`Support meshes: ${keptSupport}`)
 console.log(`Tendon/fascia meshes: ${keptTendon}`)
