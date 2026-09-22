@@ -32,9 +32,14 @@ const HEAD_NECK_TERMS = [
   'frontalis', 'occipitalis', 'temporalis', 'masseter', 'pterygoid', 'orbicularis',
   'zygomatic', 'buccinator', 'mentalis', 'nasalis', 'risorius', 'auricular', 'corrugator',
   'procerus', 'platysma', 'palpebrae', 'ocular', 'orbital', 'eyelid', 'scalp', 'facial',
+  'levator labii', 'depressor labii', 'depressor anguli', 'anguli oris', 'supercilii',
+  'superior rectus', 'inferior rectus', 'medial rectus', 'lateral rectus',
+  'superior oblique', 'inferior oblique', 'levator palpebrae',
   'tongue', 'genioglossus', 'hyoglossus', 'styloglossus', 'palatoglossus', 'phary', 'laryn',
+  'palatini', 'palatopharyngeus', 'salpingopharyngeus', 'stylopharyngeus',
+  'tensor tympani', 'stapedius', 'arytenoid', 'cricothyroid', 'thyroarytenoid', 'cricoarytenoid',
   'digastric', 'mylohyoid', 'geniohyoid', 'stylohyoid', 'sternohyoid', 'thyrohyoid', 'omohyoid',
-  'sternocleidomastoid', 'scalen', 'longus colli', 'longus capitis', 'splenius capitis',
+  'hyoid', 'sternocleidomastoid', 'scalen', 'longus colli', 'longus capitis', 'splenius capitis',
   'semispinalis capitis', 'spinalis capitis', 'rectus capitis', 'obliquus capitis', 'suboccipital',
   'capitis', 'colli'
 ]
