@@ -127,7 +127,7 @@ export default function App() {
       <div className="intro">
         <p>VOLUMEN · FRECUENCIA · DISTRIBUCIÓN</p>
         <h1>MAPA MUSCULAR</h1>
-        <span>ARRASTRA EL CUERPO · TOCA UN GRUPO MUSCULAR</span>
+        <span>1 DEDO ROTA · 2 DEDOS MUEVEN / ZOOM · TOCA PARA SELECCIONAR</span>
       </div>
 
       <section className="model-card">
