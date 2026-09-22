@@ -153,12 +153,16 @@ export default function BodyModel({ metrics, selectedMuscle, onSelectMuscle }: P
     container.appendChild(status)
 
     const controls = new OrbitControls(camera, renderer.domElement)
-    controls.enablePan = false
+    controls.enablePan = true
     controls.enableDamping = true
     controls.dampingFactor = .07
+    controls.panSpeed = .72
+    controls.screenSpacePanning = true
     controls.minDistance = 5.6
     controls.maxDistance = 13.5
     controls.target.set(0, .08, 0)
+    controls.touches.ONE = THREE.TOUCH.ROTATE
+    controls.touches.TWO = THREE.TOUCH.DOLLY_PAN
 
     scene.add(new THREE.AmbientLight('#b8c0b7', .16))
     scene.add(new THREE.HemisphereLight('#cbd5ca', '#010302', .92))
@@ -307,7 +311,10 @@ export default function BodyModel({ metrics, selectedMuscle, onSelectMuscle }: P
 
     const raycaster = new THREE.Raycaster()
     const pointer = new THREE.Vector2()
-    const handlePointer = (event: PointerEvent) => {
+    const activePointers = new Map<number, { x: number; y: number }>()
+    let gestureMoved = false
+
+    const selectAtPointer = (event: PointerEvent) => {
       const rect = renderer.domElement.getBoundingClientRect()
       pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1
       pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1
@@ -315,7 +322,34 @@ export default function BodyModel({ metrics, selectedMuscle, onSelectMuscle }: P
       const hit = raycaster.intersectObjects(muscleMeshes, false)[0]
       onSelectMuscle(hit?.object.userData.muscle as MuscleId | undefined)
     }
-    renderer.domElement.addEventListener('pointerup', handlePointer)
+
+    const handlePointerDown = (event: PointerEvent) => {
+      activePointers.set(event.pointerId, { x: event.clientX, y: event.clientY })
+      if (activePointers.size > 1) gestureMoved = true
+    }
+
+    const handlePointerMove = (event: PointerEvent) => {
+      const start = activePointers.get(event.pointerId)
+      if (!start) return
+      if (Math.hypot(event.clientX - start.x, event.clientY - start.y) > 6) gestureMoved = true
+    }
+
+    const handlePointerUp = (event: PointerEvent) => {
+      const isTap = activePointers.size === 1 && !gestureMoved
+      activePointers.delete(event.pointerId)
+      if (isTap) selectAtPointer(event)
+      if (activePointers.size === 0) gestureMoved = false
+    }
+
+    const handlePointerCancel = (event: PointerEvent) => {
+      activePointers.delete(event.pointerId)
+      if (activePointers.size === 0) gestureMoved = false
+    }
+
+    renderer.domElement.addEventListener('pointerdown', handlePointerDown)
+    renderer.domElement.addEventListener('pointermove', handlePointerMove)
+    renderer.domElement.addEventListener('pointerup', handlePointerUp)
+    renderer.domElement.addEventListener('pointercancel', handlePointerCancel)
 
     const resize = () => {
       const width = container.clientWidth
@@ -362,7 +396,10 @@ export default function BodyModel({ metrics, selectedMuscle, onSelectMuscle }: P
       cancelled = true
       cancelAnimationFrame(frame)
       resizeObserver.disconnect()
-      renderer.domElement.removeEventListener('pointerup', handlePointer)
+      renderer.domElement.removeEventListener('pointerdown', handlePointerDown)
+      renderer.domElement.removeEventListener('pointermove', handlePointerMove)
+      renderer.domElement.removeEventListener('pointerup', handlePointerUp)
+      renderer.domElement.removeEventListener('pointercancel', handlePointerCancel)
       controls.dispose()
       status.remove()
       if (loadedRoot) {
