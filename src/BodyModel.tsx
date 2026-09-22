@@ -235,6 +235,7 @@ export default function BodyModel({ metrics, selectedMuscle, selectedAnatomyKey,
     scene.add(outerRing)
 
     const muscleMeshes: THREE.Mesh[] = []
+    const raycastMeshes: THREE.Mesh[] = []
     const loader = new GLTFLoader()
 
     loader.load(
@@ -290,6 +291,8 @@ export default function BodyModel({ metrics, selectedMuscle, selectedAnatomyKey,
           object.castShadow = false
           object.receiveShadow = false
 
+          if (!tendonLike) raycastMeshes.push(object)
+
           if (muscle) {
             object.userData.muscle = muscle
             object.userData.baseColor = baseColor.clone()
@@ -342,8 +345,8 @@ export default function BodyModel({ metrics, selectedMuscle, selectedAnatomyKey,
       pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1
       pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1
       raycaster.setFromCamera(pointer, camera)
-      const hit = raycaster.intersectObjects(muscleMeshes, false)[0]
-      if (!hit) {
+      const hit = raycaster.intersectObjects(raycastMeshes, false)[0]
+      if (!hit || !hit.object.userData.muscle) {
         onSelectMuscle(undefined)
         return
       }
