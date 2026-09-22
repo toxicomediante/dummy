@@ -7,7 +7,8 @@ import type { MuscleId, MuscleMetric } from './types'
 interface Props {
   metrics: MuscleMetric[]
   selectedMuscle?: MuscleId
-  onSelectMuscle: (muscle?: MuscleId) => void
+  selectedAnatomyKey?: string
+  onSelectMuscle: (muscle?: MuscleId, anatomyKey?: string, anatomyLabel?: string) => void
 }
 
 const BODY_MODEL_URL = `${import.meta.env.BASE_URL}models/bodyparts-yose.glb`
@@ -43,13 +44,18 @@ function normalizeName(name: string) {
 function muscleFromName(rawName: string): MuscleId | undefined {
   const n = normalizeName(rawName)
 
-  if (n.includes('pectoralis') || n.includes('serratus anterior')) return 'chest'
+  if (n.includes('pectoralis')) return 'chest'
   if (n.includes('rectus abdominis') || n.includes('transversus abdominis')) return 'abs'
-  if (n.includes('external oblique') || n.includes('internal oblique') || n.includes('obliquus')) return 'obliques'
+  if (n.includes('external oblique') || n.includes('internal oblique')) return 'obliques'
   if (n.includes('latissimus')) return 'lats'
-  if (n.includes('trapezius') || n.includes('levator scapulae')) return 'traps'
-  if (n.includes('rhomboid') || n.includes('supraspinatus') || n.includes('infraspinatus') || n.includes('teres major') || n.includes('teres minor')) return 'upper_back'
-  if (n.includes('erector spinae') || n.includes('iliocostalis') || n.includes('longissimus') || n.includes('spinalis') || n.includes('multifidus') || n.includes('quadratus lumborum')) return 'lower_back'
+  if (n.includes('trapezius')) return 'traps'
+  if (n.includes('rhomboid')) return 'upper_back'
+  if (
+    n.includes('erector spinae') || n.includes('iliocostalis') ||
+    n.includes('longissimus thoracis') || n.includes('longissimus lumborum') ||
+    n.includes('spinalis thoracis') || n.includes('multifidus thoracis') ||
+    n.includes('multifidus lumborum') || n.includes('quadratus lumborum')
+  ) return 'lower_back'
 
   if (n.includes('deltoid')) {
     if (n.includes('anterior') || n.includes('clavicular')) return 'front_delts'
@@ -57,8 +63,8 @@ function muscleFromName(rawName: string): MuscleId | undefined {
     return 'side_delts'
   }
 
-  if (n.includes('biceps brachii') || n.includes('brachialis') || n.includes('coracobrachialis')) return 'biceps'
-  if (n.includes('triceps brachii') || n.includes('anconeus')) return 'triceps'
+  if (n.includes('biceps brachii')) return 'biceps'
+  if (n.includes('triceps brachii')) return 'triceps'
   if (
     n.includes('brachioradialis') || n.includes('pronator') || n.includes('supinator') ||
     n.includes('flexor carpi') || n.includes('extensor carpi') || n.includes('flexor digitorum') ||
@@ -67,10 +73,10 @@ function muscleFromName(rawName: string): MuscleId | undefined {
   ) return 'forearms'
 
   if (n.includes('gluteus')) return 'glutes'
-  if (n.includes('rectus femoris') || n.includes('vastus') || n.includes('sartorius')) return 'quads'
+  if (n.includes('rectus femoris') || n.includes('vastus')) return 'quads'
   if (n.includes('biceps femoris') || n.includes('semitendinosus') || n.includes('semimembranosus')) return 'hamstrings'
   if (n.includes('adductor') || n.includes('gracilis') || n.includes('pectineus')) return 'adductors'
-  if (n.includes('gastrocnemius') || n.includes('soleus') || n.includes('plantaris') || n.includes('tibialis') || n.includes('fibularis') || n.includes('peroneus')) return 'calves'
+  if (n.includes('gastrocnemius') || n.includes('soleus') || n.includes('plantaris')) return 'calves'
 
   return undefined
 }
@@ -113,12 +119,14 @@ function makeLine(points: THREE.Vector3[], color: string, opacity: number, loop 
   return line
 }
 
-export default function BodyModel({ metrics, selectedMuscle, onSelectMuscle }: Props) {
+export default function BodyModel({ metrics, selectedMuscle, selectedAnatomyKey, onSelectMuscle }: Props) {
   const host = useRef<HTMLDivElement | null>(null)
   const metricsRef = useRef(metrics)
   const selectedRef = useRef(selectedMuscle)
+  const selectedAnatomyRef = useRef(selectedAnatomyKey)
   metricsRef.current = metrics
   selectedRef.current = selectedMuscle
+  selectedAnatomyRef.current = selectedAnatomyKey
 
   useEffect(() => {
     if (!host.current) return
@@ -156,13 +164,11 @@ export default function BodyModel({ metrics, selectedMuscle, onSelectMuscle }: P
     controls.enablePan = true
     controls.enableDamping = true
     controls.dampingFactor = .07
-    controls.panSpeed = .72
+    controls.panSpeed = .9
     controls.screenSpacePanning = true
     controls.minDistance = 5.6
     controls.maxDistance = 13.5
     controls.target.set(0, .08, 0)
-    controls.touches.ONE = THREE.TOUCH.ROTATE
-    controls.touches.TWO = THREE.TOUCH.DOLLY_PAN
 
     scene.add(new THREE.AmbientLight('#b8c0b7', .16))
     scene.add(new THREE.HemisphereLight('#cbd5ca', '#010302', .92))
@@ -287,6 +293,8 @@ export default function BodyModel({ metrics, selectedMuscle, onSelectMuscle }: P
           if (muscle) {
             object.userData.muscle = muscle
             object.userData.baseColor = baseColor.clone()
+            object.userData.anatomyKey = object.userData.yoseAnatomyKey || normalizeName(object.name)
+            object.userData.anatomyLabel = object.userData.yoseLabel || object.name
             muscleMeshes.push(object)
           }
         })
@@ -311,8 +319,18 @@ export default function BodyModel({ metrics, selectedMuscle, onSelectMuscle }: P
 
     const raycaster = new THREE.Raycaster()
     const pointer = new THREE.Vector2()
-    const activePointers = new Map<number, { x: number; y: number }>()
+
+    type PointerState = {
+      x: number
+      y: number
+      startX: number
+      startY: number
+      pointerType: string
+    }
+
+    const activePointers = new Map<number, PointerState>()
     let gestureMoved = false
+    let multiState: { midX: number; midY: number; distance: number } | null = null
 
     const selectAtPointer = (event: PointerEvent) => {
       const rect = renderer.domElement.getBoundingClientRect()
@@ -320,36 +338,160 @@ export default function BodyModel({ metrics, selectedMuscle, onSelectMuscle }: P
       pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1
       raycaster.setFromCamera(pointer, camera)
       const hit = raycaster.intersectObjects(muscleMeshes, false)[0]
-      onSelectMuscle(hit?.object.userData.muscle as MuscleId | undefined)
+      if (!hit) {
+        onSelectMuscle(undefined)
+        return
+      }
+      const mesh = hit.object as THREE.Mesh
+      onSelectMuscle(
+        mesh.userData.muscle as MuscleId,
+        mesh.userData.anatomyKey as string,
+        mesh.userData.anatomyLabel as string
+      )
+    }
+
+    const touchPointers = () => [...activePointers.values()].filter(item => item.pointerType === 'touch')
+
+    const currentMultiState = () => {
+      const points = touchPointers()
+      if (points.length !== 2) return null
+      const [a, b] = points
+      return {
+        midX: (a.x + b.x) / 2,
+        midY: (a.y + b.y) / 2,
+        distance: Math.hypot(b.x - a.x, b.y - a.y)
+      }
+    }
+
+    const rotateTouch = (dx: number, dy: number) => {
+      const offset = camera.position.clone().sub(controls.target)
+      const spherical = new THREE.Spherical().setFromVector3(offset)
+      const speed = .0075
+      spherical.theta -= dx * speed
+      spherical.phi -= dy * speed
+      spherical.phi = THREE.MathUtils.clamp(spherical.phi, .05, Math.PI - .05)
+      offset.setFromSpherical(spherical)
+      camera.position.copy(controls.target).add(offset)
+      camera.lookAt(controls.target)
+      camera.updateMatrixWorld()
+    }
+
+    const panAndZoomTouch = (next: { midX: number; midY: number; distance: number }) => {
+      if (!multiState) {
+        multiState = next
+        return
+      }
+
+      const dx = next.midX - multiState.midX
+      const dy = next.midY - multiState.midY
+      const canvasHeight = Math.max(1, renderer.domElement.clientHeight)
+      const distanceToTarget = camera.position.distanceTo(controls.target)
+      const worldPerPixel = 2 * distanceToTarget * Math.tan(THREE.MathUtils.degToRad(camera.fov * .5)) / canvasHeight
+
+      camera.updateMatrixWorld()
+      const right = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0)
+      const up = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 1)
+      const panOffset = right.multiplyScalar(-dx * worldPerPixel).add(up.multiplyScalar(dy * worldPerPixel))
+      camera.position.add(panOffset)
+      controls.target.add(panOffset)
+
+      if (multiState.distance > 0 && next.distance > 0) {
+        const ratio = multiState.distance / next.distance
+        const desiredDistance = THREE.MathUtils.clamp(
+          camera.position.distanceTo(controls.target) * ratio,
+          controls.minDistance,
+          controls.maxDistance
+        )
+        const direction = camera.position.clone().sub(controls.target).normalize()
+        camera.position.copy(controls.target).addScaledVector(direction, desiredDistance)
+      }
+
+      camera.lookAt(controls.target)
+      camera.updateMatrixWorld()
+      multiState = next
     }
 
     const handlePointerDown = (event: PointerEvent) => {
-      activePointers.set(event.pointerId, { x: event.clientX, y: event.clientY })
-      if (activePointers.size > 1) gestureMoved = true
+      const state: PointerState = {
+        x: event.clientX,
+        y: event.clientY,
+        startX: event.clientX,
+        startY: event.clientY,
+        pointerType: event.pointerType
+      }
+      activePointers.set(event.pointerId, state)
+
+      if (event.pointerType === 'touch') {
+        event.preventDefault()
+        event.stopPropagation()
+        try { renderer.domElement.setPointerCapture(event.pointerId) } catch { /* noop */ }
+        const touches = touchPointers()
+        if (touches.length === 2) {
+          gestureMoved = true
+          multiState = currentMultiState()
+        }
+      }
     }
 
     const handlePointerMove = (event: PointerEvent) => {
-      const start = activePointers.get(event.pointerId)
-      if (!start) return
-      if (Math.hypot(event.clientX - start.x, event.clientY - start.y) > 6) gestureMoved = true
+      const state = activePointers.get(event.pointerId)
+      if (!state) return
+
+      const previousX = state.x
+      const previousY = state.y
+      state.x = event.clientX
+      state.y = event.clientY
+      activePointers.set(event.pointerId, state)
+
+      if (Math.hypot(state.x - state.startX, state.y - state.startY) > 5) gestureMoved = true
+
+      if (event.pointerType !== 'touch') return
+
+      event.preventDefault()
+      event.stopPropagation()
+      const touches = touchPointers()
+      if (touches.length === 1) {
+        multiState = null
+        rotateTouch(state.x - previousX, state.y - previousY)
+      } else if (touches.length === 2) {
+        const next = currentMultiState()
+        if (next) panAndZoomTouch(next)
+      }
     }
 
     const handlePointerUp = (event: PointerEvent) => {
-      const isTap = activePointers.size === 1 && !gestureMoved
+      const state = activePointers.get(event.pointerId)
+      const pointerCountBeforeUp = activePointers.size
+      const isTap = Boolean(state) && pointerCountBeforeUp === 1 && !gestureMoved
+
+      if (event.pointerType === 'touch') {
+        event.preventDefault()
+        event.stopPropagation()
+        try { renderer.domElement.releasePointerCapture(event.pointerId) } catch { /* noop */ }
+      }
+
       activePointers.delete(event.pointerId)
+      const remainingTouches = touchPointers()
+      multiState = remainingTouches.length === 2 ? currentMultiState() : null
+
       if (isTap) selectAtPointer(event)
       if (activePointers.size === 0) gestureMoved = false
     }
 
     const handlePointerCancel = (event: PointerEvent) => {
+      if (event.pointerType === 'touch') {
+        event.preventDefault()
+        event.stopPropagation()
+      }
       activePointers.delete(event.pointerId)
+      multiState = null
       if (activePointers.size === 0) gestureMoved = false
     }
 
-    renderer.domElement.addEventListener('pointerdown', handlePointerDown)
-    renderer.domElement.addEventListener('pointermove', handlePointerMove)
-    renderer.domElement.addEventListener('pointerup', handlePointerUp)
-    renderer.domElement.addEventListener('pointercancel', handlePointerCancel)
+    renderer.domElement.addEventListener('pointerdown', handlePointerDown, { capture: true })
+    renderer.domElement.addEventListener('pointermove', handlePointerMove, { capture: true })
+    renderer.domElement.addEventListener('pointerup', handlePointerUp, { capture: true })
+    renderer.domElement.addEventListener('pointercancel', handlePointerCancel, { capture: true })
 
     const resize = () => {
       const width = container.clientWidth
@@ -373,7 +515,10 @@ export default function BodyModel({ metrics, selectedMuscle, onSelectMuscle }: P
         const muscle = mesh.userData.muscle as MuscleId
         const score = metricMap.get(muscle)?.score ?? 0
         const intensity = THREE.MathUtils.clamp(score / 100, 0, 1)
-        const selected = selectedRef.current === muscle
+        const exactSelection = selectedAnatomyRef.current
+        const selected = exactSelection
+          ? mesh.userData.anatomyKey === exactSelection
+          : selectedRef.current === muscle
         const material = mesh.material as THREE.MeshStandardMaterial
         const baseColor = mesh.userData.baseColor as THREE.Color
 
@@ -396,10 +541,10 @@ export default function BodyModel({ metrics, selectedMuscle, onSelectMuscle }: P
       cancelled = true
       cancelAnimationFrame(frame)
       resizeObserver.disconnect()
-      renderer.domElement.removeEventListener('pointerdown', handlePointerDown)
-      renderer.domElement.removeEventListener('pointermove', handlePointerMove)
-      renderer.domElement.removeEventListener('pointerup', handlePointerUp)
-      renderer.domElement.removeEventListener('pointercancel', handlePointerCancel)
+      renderer.domElement.removeEventListener('pointerdown', handlePointerDown, { capture: true })
+      renderer.domElement.removeEventListener('pointermove', handlePointerMove, { capture: true })
+      renderer.domElement.removeEventListener('pointerup', handlePointerUp, { capture: true })
+      renderer.domElement.removeEventListener('pointercancel', handlePointerCancel, { capture: true })
       controls.dispose()
       status.remove()
       if (loadedRoot) {
