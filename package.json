@@ -4,8 +4,9 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc -b && vite build",
+    "dev": "npm run model:build && vite",
+    "model:build": "node scripts/build-yose-model.mjs",
+    "build": "npm run model:build && tsc -b && vite build && node scripts/clean-dist-model-source.mjs",
     "preview": "vite preview",
     "cap:sync": "npx cap sync android",
     "cap:add:android": "npx cap add android",
@@ -22,6 +23,8 @@
   "devDependencies": {
     "@capacitor/android": "latest",
     "@capacitor/cli": "latest",
+    "@gltf-transform/core": "latest",
+    "@gltf-transform/functions": "latest",
     "@types/react": "latest",
     "@types/react-dom": "latest",
     "@types/three": "latest",
