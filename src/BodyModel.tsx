@@ -45,8 +45,8 @@ function muscleFromName(rawName: string): MuscleId | undefined {
   const n = normalizeName(rawName)
 
   if (n.includes('pectoralis')) return 'chest'
-  if (n.includes('rectus abdominis') || n.includes('transversus abdominis')) return 'abs'
-  if (n.includes('external oblique') || n.includes('internal oblique')) return 'obliques'
+  if (n.includes('rectus abdominis')) return 'abs'
+  if (n.includes('external oblique')) return 'obliques'
   if (n.includes('latissimus')) return 'lats'
   if (n.includes('trapezius')) return 'traps'
   if (n.includes('rhomboid')) return 'upper_back'
@@ -104,19 +104,84 @@ function disposeObject(root: THREE.Object3D) {
   })
 }
 
-function circlePoints(radius: number, segments = 96) {
+function circlePoints(radius: number, segments = 96, cx = 0, cy = 0) {
   return Array.from({ length: segments }, (_, index) => {
     const angle = index / segments * Math.PI * 2
-    return new THREE.Vector3(Math.cos(angle) * radius, Math.sin(angle) * radius, 0)
+    return new THREE.Vector3(cx + Math.cos(angle) * radius, cy + Math.sin(angle) * radius, 0)
+  })
+}
+
+function arcPoints(cx: number, cy: number, radius: number, start: number, end: number, segments = 28) {
+  return Array.from({ length: segments + 1 }, (_, index) => {
+    const t = index / segments
+    const angle = start + (end - start) * t
+    return new THREE.Vector3(cx + Math.cos(angle) * radius, cy + Math.sin(angle) * radius, 0)
   })
 }
 
 function makeLine(points: THREE.Vector3[], color: string, opacity: number, loop = false) {
   const geometry = new THREE.BufferGeometry().setFromPoints(points)
-  const material = new THREE.LineBasicMaterial({ color, transparent: true, opacity, depthWrite: false })
+  const material = new THREE.LineBasicMaterial({
+    color,
+    transparent: true,
+    opacity,
+    depthWrite: false,
+    depthTest: false,
+    toneMapped: false
+  })
   const line = loop ? new THREE.LineLoop(geometry, material) : new THREE.Line(geometry, material)
-  line.renderOrder = -1
+  line.renderOrder = -10
   return line
+}
+
+function createVitruvianBackdrop() {
+  const group = new THREE.Group()
+  const lines: THREE.Line[] = []
+  const add = (line: THREE.Line) => {
+    lines.push(line)
+    group.add(line)
+  }
+
+  add(makeLine(circlePoints(.78), '#cfff1a', .16, true))
+  add(makeLine(circlePoints(.715), '#cbd2c9', .11, true))
+  add(makeLine(circlePoints(.535), '#cbd2c9', .065, true))
+  add(makeLine(circlePoints(.215), '#cfff1a', .13, true))
+
+  add(makeLine([
+    new THREE.Vector3(-.58, .57, 0), new THREE.Vector3(.58, .57, 0),
+    new THREE.Vector3(.58, -.57, 0), new THREE.Vector3(-.58, -.57, 0)
+  ], '#d9dfd7', .105, true))
+  add(makeLine([
+    new THREE.Vector3(0, .74, 0), new THREE.Vector3(.49, 0, 0),
+    new THREE.Vector3(0, -.74, 0), new THREE.Vector3(-.49, 0, 0)
+  ], '#cbd2c9', .075, true))
+  add(makeLine([new THREE.Vector3(-.58, .57, 0), new THREE.Vector3(.58, -.57, 0)], '#cbd2c9', .035))
+  add(makeLine([new THREE.Vector3(.58, .57, 0), new THREE.Vector3(-.58, -.57, 0)], '#cbd2c9', .035))
+
+  add(makeLine([new THREE.Vector3(0, -.9, 0), new THREE.Vector3(0, .9, 0)], '#dce3da', .12))
+  add(makeLine([new THREE.Vector3(-.86, 0, 0), new THREE.Vector3(.86, 0, 0)], '#dce3da', .1))
+
+  const pieces = 28
+  for (let i = 0; i < pieces; i += 2) {
+    const start = i / pieces * Math.PI * 2
+    const end = (i + .82) / pieces * Math.PI * 2
+    add(makeLine(arcPoints(0, 0, .635, start, end, 6), '#cbd2c9', .075))
+  }
+
+  ;[[0, .78], [0, -.78], [-.76, 0], [.76, 0]].forEach(([x, y]) => {
+    add(makeLine(circlePoints(.055, 36, x, y), '#dce3da', .13, true))
+    add(makeLine(circlePoints(.017, 24, x, y), '#cfff1a', .22, true))
+  })
+
+  add(makeLine(arcPoints(-.665, 0, .082, -.55 * Math.PI, .55 * Math.PI, 30), '#dce3da', .13))
+  add(makeLine(arcPoints(-.64, 0, .06, -.55 * Math.PI, .55 * Math.PI, 30), '#cfff1a', .08))
+  add(makeLine(arcPoints(.665, 0, .082, .45 * Math.PI, 1.55 * Math.PI, 30), '#dce3da', .13))
+  add(makeLine(arcPoints(.64, 0, .06, .45 * Math.PI, 1.55 * Math.PI, 30), '#cfff1a', .08))
+
+  add(makeLine([new THREE.Vector3(-.06, .84, 0), new THREE.Vector3(0, .91, 0), new THREE.Vector3(.06, .84, 0)], '#cfff1a', .15))
+  add(makeLine([new THREE.Vector3(-.06, -.84, 0), new THREE.Vector3(0, -.91, 0), new THREE.Vector3(.06, -.84, 0)], '#cfff1a', .15))
+
+  return { group, lines }
 }
 
 export default function BodyModel({ metrics, selectedMuscle, selectedAnatomyKey, onSelectMuscle }: Props) {
@@ -137,6 +202,10 @@ export default function BodyModel({ metrics, selectedMuscle, selectedAnatomyKey,
 
     const scene = new THREE.Scene()
     scene.fog = new THREE.FogExp2('#020403', .076)
+    const backdropScene = new THREE.Scene()
+    const backdropCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, -1, 1)
+    const { group: backdrop, lines: backdropLines } = createVitruvianBackdrop()
+    backdropScene.add(backdrop)
 
     const camera = new THREE.PerspectiveCamera(30, 1, .1, 100)
     camera.position.set(0, .08, 9.2)
@@ -147,6 +216,8 @@ export default function BodyModel({ metrics, selectedMuscle, selectedAnatomyKey,
     renderer.toneMapping = THREE.ACESFilmicToneMapping
     renderer.toneMappingExposure = 1.02
     renderer.shadowMap.enabled = false
+    renderer.autoClear = false
+    renderer.setClearColor(0x000000, 0)
     renderer.domElement.style.touchAction = 'none'
     container.appendChild(renderer.domElement)
 
@@ -193,46 +264,13 @@ export default function BodyModel({ metrics, selectedMuscle, selectedAnatomyKey,
     halo.position.set(0, .55, -3.2)
     scene.add(halo)
 
-    const ritual = new THREE.Group()
-    ritual.position.set(0, .25, -1.45)
-    ritual.scale.set(1, 1.08, 1)
-    const ritualLines = [
-      makeLine(circlePoints(1.58), '#cfff1a', .09, true),
-      makeLine(circlePoints(1.12), '#cbd2c9', .05, true),
-      makeLine([
-        new THREE.Vector3(0, 1.58, 0),
-        new THREE.Vector3(-1.02, -1.18, 0),
-        new THREE.Vector3(1.02, -1.18, 0)
-      ], '#cbd2c9', .065, true),
-      makeLine([new THREE.Vector3(0, -1.72, 0), new THREE.Vector3(0, 1.72, 0)], '#cfff1a', .055),
-      makeLine([new THREE.Vector3(-1.42, .12, 0), new THREE.Vector3(1.42, .12, 0)], '#cbd2c9', .04)
-    ]
-    ritualLines.forEach(line => ritual.add(line))
-    scene.add(ritual)
-
     const ground = new THREE.Mesh(
       new THREE.CircleGeometry(2.35, 96),
-      new THREE.MeshBasicMaterial({ color: '#050806', transparent: true, opacity: .88 })
+      new THREE.MeshBasicMaterial({ color: '#050806', transparent: true, opacity: .84 })
     )
     ground.rotation.x = -Math.PI / 2
     ground.position.y = -2.19
     scene.add(ground)
-
-    const ring = new THREE.Mesh(
-      new THREE.RingGeometry(1.7, 1.72, 128),
-      new THREE.MeshBasicMaterial({ color: '#cfff1a', transparent: true, opacity: .2, side: THREE.DoubleSide })
-    )
-    ring.rotation.x = -Math.PI / 2
-    ring.position.y = -2.17
-    scene.add(ring)
-
-    const outerRing = new THREE.Mesh(
-      new THREE.RingGeometry(2.12, 2.125, 128),
-      new THREE.MeshBasicMaterial({ color: '#9fab9f', transparent: true, opacity: .055, side: THREE.DoubleSide })
-    )
-    outerRing.rotation.x = -Math.PI / 2
-    outerRing.position.y = -2.165
-    scene.add(outerRing)
 
     const muscleMeshes: THREE.Mesh[] = []
     const raycastMeshes: THREE.Mesh[] = []
@@ -500,6 +538,13 @@ export default function BodyModel({ metrics, selectedMuscle, selectedAnatomyKey,
       renderer.setSize(width, height, false)
       camera.aspect = width / Math.max(1, height)
       camera.updateProjectionMatrix()
+
+      const aspect = width / Math.max(1, height)
+      backdropCamera.left = -aspect
+      backdropCamera.right = aspect
+      backdropCamera.top = 1
+      backdropCamera.bottom = -1
+      backdropCamera.updateProjectionMatrix()
     }
 
     const resizeObserver = new ResizeObserver(resize)
@@ -531,9 +576,10 @@ export default function BodyModel({ metrics, selectedMuscle, selectedAnatomyKey,
 
       const t = performance.now()
       halo.intensity = .72 + Math.sin(t * .0011) * .09
-      ritual.rotation.z = Math.sin(t * .00009) * .035
-      ring.rotation.z += .00115
-      outerRing.rotation.z -= .0005
+
+      renderer.clear(true, true, true)
+      renderer.render(backdropScene, backdropCamera)
+      renderer.clearDepth()
       renderer.render(scene, camera)
     }
     animate()
@@ -552,16 +598,12 @@ export default function BodyModel({ metrics, selectedMuscle, selectedAnatomyKey,
         scene.remove(loadedRoot)
         disposeObject(loadedRoot)
       }
-      ritualLines.forEach(line => {
+      backdropLines.forEach(line => {
         line.geometry.dispose()
         ;(line.material as THREE.Material).dispose()
       })
       ground.geometry.dispose()
       ;(ground.material as THREE.Material).dispose()
-      ring.geometry.dispose()
-      ;(ring.material as THREE.Material).dispose()
-      outerRing.geometry.dispose()
-      ;(outerRing.material as THREE.Material).dispose()
       renderer.dispose()
       renderer.domElement.remove()
     }
