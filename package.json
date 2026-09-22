@@ -29,6 +29,7 @@
     "@types/react-dom": "latest",
     "@types/three": "latest",
     "@vitejs/plugin-react": "latest",
+    "sharp": "latest",
     "typescript": "latest",
     "vite": "latest"
   }
