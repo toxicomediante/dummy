@@ -6,7 +6,7 @@ export const MUSCLE_LABELS: Record<MuscleId, string> = {
   side_delts: 'Deltoide lateral',
   rear_delts: 'Deltoide posterior',
   lats: 'Dorsal',
-  upper_back: 'Espalda alta',
+  upper_back: 'Romboides',
   traps: 'Trapecio',
   biceps: 'Bíceps',
   triceps: 'Tríceps',
