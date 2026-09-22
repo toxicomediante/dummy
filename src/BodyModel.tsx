@@ -1,6 +1,8 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
+import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js'
 import type { MuscleId, MuscleMetric } from './types'
 
 interface Props {
@@ -9,141 +11,242 @@ interface Props {
   onSelectMuscle: (muscle?: MuscleId) => void
 }
 
-interface PartSpec {
-  muscle?: MuscleId
-  geometry: THREE.BufferGeometry
-  position: [number, number, number]
-  rotation?: [number, number, number]
-  scale?: [number, number, number]
+type AnatomySource = 'zanatomy' | 'hbe'
+
+const SOURCES: Record<AnatomySource, { label: string; credit: string; url: string; rotateX?: number }> = {
+  zanatomy: {
+    label: 'Z-ANATOMY',
+    credit: 'Z-ANATOMY · MODELO MUSCULAR',
+    url: 'https://raw.githubusercontent.com/Liyucheng1997/242_lab-human-anatomy/main/public/models/muscular.glb'
+  },
+  hbe: {
+    label: 'HBE · BODYPARTS3D',
+    credit: 'BASE HBE · BODYPARTS3D',
+    url: 'https://raw.githubusercontent.com/JohanBellander/BodyExplorer/main/public/anatomy.glb',
+    rotateX: -Math.PI / 2
+  }
 }
 
-const skin = new THREE.Color('#272c29')
-const inactive = new THREE.Color('#4c554d')
 const acid = new THREE.Color('#cfff1a')
+const inactive = new THREE.Color('#4c3832')
+const unclassified = new THREE.Color('#2d2926')
+const tendon = new THREE.Color('#69645c')
 
-function capsule(radius: number, length: number) {
-  return new THREE.CapsuleGeometry(radius, length, 6, 12)
+function normalizeName(name: string) {
+  return name.toLowerCase().replace(/[_.-]+/g, ' ').replace(/\s+/g, ' ').trim()
 }
 
-function sphere(radius: number) {
-  return new THREE.SphereGeometry(radius, 18, 14)
+function muscleFromName(rawName: string): MuscleId | undefined {
+  const n = normalizeName(rawName)
+
+  if (n.includes('pectoralis') || n.includes('serratus anterior')) return 'chest'
+  if (n.includes('rectus abdominis') || n.includes('transversus abdominis')) return 'abs'
+  if (n.includes('external oblique') || n.includes('internal oblique') || n.includes('obliquus')) return 'obliques'
+  if (n.includes('latissimus')) return 'lats'
+  if (n.includes('trapezius') || n.includes('levator scapulae')) return 'traps'
+  if (n.includes('rhomboid') || n.includes('supraspinatus') || n.includes('infraspinatus') || n.includes('teres major') || n.includes('teres minor')) return 'upper_back'
+  if (n.includes('erector spinae') || n.includes('iliocostalis') || n.includes('longissimus') || n.includes('spinalis') || n.includes('multifidus') || n.includes('quadratus lumborum')) return 'lower_back'
+
+  if (n.includes('deltoid')) {
+    if (n.includes('anterior') || n.includes('clavicular')) return 'front_delts'
+    if (n.includes('posterior') || n.includes('spinal')) return 'rear_delts'
+    return 'side_delts'
+  }
+
+  if (n.includes('biceps brachii') || n.includes('brachialis') || n.includes('coracobrachialis')) return 'biceps'
+  if (n.includes('triceps brachii') || n.includes('anconeus')) return 'triceps'
+  if (
+    n.includes('brachioradialis') || n.includes('pronator') || n.includes('supinator') ||
+    n.includes('flexor carpi') || n.includes('extensor carpi') || n.includes('flexor digitorum') ||
+    n.includes('extensor digitorum') || n.includes('palmaris') || n.includes('extensor pollicis') ||
+    n.includes('flexor pollicis longus')
+  ) return 'forearms'
+
+  if (n.includes('gluteus')) return 'glutes'
+  if (n.includes('rectus femoris') || n.includes('vastus') || n.includes('sartorius')) return 'quads'
+  if (n.includes('biceps femoris') || n.includes('semitendinosus') || n.includes('semimembranosus')) return 'hamstrings'
+  if (n.includes('adductor') || n.includes('gracilis') || n.includes('pectineus')) return 'adductors'
+  if (n.includes('gastrocnemius') || n.includes('soleus') || n.includes('plantaris') || n.includes('tibialis') || n.includes('fibularis') || n.includes('peroneus')) return 'calves'
+
+  return undefined
 }
 
-function box(x: number, y: number, z: number) {
-  return new THREE.BoxGeometry(x, y, z, 3, 3, 3)
+function isTendonLike(name: string) {
+  const n = normalizeName(name)
+  return n.includes('tendon') || n.includes('ligament') || n.includes('fascia') || n.includes('retinaculum') || n.includes('aponeuros') || n.includes('membrane')
 }
 
-function partSpecs(): PartSpec[] {
-  const both = (muscle: MuscleId, geometry: THREE.BufferGeometry, x: number, y: number, z: number, rotation?: [number, number, number], scale?: [number, number, number]): PartSpec[] => [
-    { muscle, geometry: geometry.clone(), position: [-x, y, z], rotation, scale },
-    { muscle, geometry: geometry.clone(), position: [x, y, z], rotation: rotation ? [rotation[0], -rotation[1], -rotation[2]] : undefined, scale }
-  ]
-
-  return [
-    { geometry: sphere(.34), position: [0, 3.35, 0] },
-    { geometry: capsule(.15, .28), position: [0, 2.92, 0] },
-    { muscle: 'chest', geometry: box(.72, .5, .24), position: [0, 2.42, .19], scale: [1.45, 1, .9] },
-    { muscle: 'abs', geometry: box(.5, .9, .18), position: [0, 1.58, .18], scale: [1.12, 1, .85] },
-    { muscle: 'obliques', geometry: box(.24, .82, .16), position: [-.42, 1.58, .08], rotation: [0, 0, -.08] },
-    { muscle: 'obliques', geometry: box(.24, .82, .16), position: [.42, 1.58, .08], rotation: [0, 0, .08] },
-    { muscle: 'lats', geometry: box(.3, .92, .16), position: [-.48, 1.78, -.17], rotation: [0, 0, -.16] },
-    { muscle: 'lats', geometry: box(.3, .92, .16), position: [.48, 1.78, -.17], rotation: [0, 0, .16] },
-    { muscle: 'upper_back', geometry: box(.75, .65, .18), position: [0, 2.26, -.2], scale: [1.35, 1, .9] },
-    { muscle: 'traps', geometry: box(.52, .38, .16), position: [0, 2.72, -.08], rotation: [.12, 0, 0] },
-    { muscle: 'lower_back', geometry: box(.52, .58, .15), position: [0, 1.18, -.17] },
-    ...both('front_delts', sphere(.23), .67, 2.48, .12),
-    ...both('side_delts', sphere(.22), .74, 2.43, -.02),
-    ...both('rear_delts', sphere(.2), .67, 2.42, -.2),
-    ...both('biceps', capsule(.14, .46), .86, 1.84, .08),
-    ...both('triceps', capsule(.14, .5), .86, 1.84, -.12),
-    ...both('forearms', capsule(.11, .55), .9, 1.12, 0),
-    { muscle: 'glutes', geometry: sphere(.31), position: [-.28, .78, -.22], scale: [1, 1.15, .8] },
-    { muscle: 'glutes', geometry: sphere(.31), position: [.28, .78, -.22], scale: [1, 1.15, .8] },
-    ...both('quads', capsule(.2, .82), .3, -.06, .08, undefined, [1.05, 1, .92]),
-    ...both('hamstrings', capsule(.19, .82), .3, -.06, -.15, undefined, [1, 1, .88]),
-    ...both('adductors', capsule(.13, .7), .12, -.05, -.01),
-    ...both('calves', capsule(.16, .65), .29, -1.08, -.06),
-    { geometry: capsule(.1, .32), position: [-.3, -1.72, .08], rotation: [Math.PI / 2, 0, 0] },
-    { geometry: capsule(.1, .32), position: [.3, -1.72, .08], rotation: [Math.PI / 2, 0, 0] }
-  ]
+function disposeObject(root: THREE.Object3D) {
+  root.traverse(object => {
+    if (!(object instanceof THREE.Mesh)) return
+    object.geometry.dispose()
+    const materials = Array.isArray(object.material) ? object.material : [object.material]
+    materials.forEach(material => material.dispose())
+  })
 }
 
 export default function BodyModel({ metrics, selectedMuscle, onSelectMuscle }: Props) {
   const host = useRef<HTMLDivElement | null>(null)
   const metricsRef = useRef(metrics)
   const selectedRef = useRef(selectedMuscle)
+  const [source, setSource] = useState<AnatomySource>('zanatomy')
   metricsRef.current = metrics
   selectedRef.current = selectedMuscle
 
   useEffect(() => {
     if (!host.current) return
+
     const container = host.current
+    const config = SOURCES[source]
+    let cancelled = false
+    let loadedRoot: THREE.Object3D | null = null
+
     const scene = new THREE.Scene()
-    scene.fog = new THREE.FogExp2('#050706', .07)
+    scene.fog = new THREE.FogExp2('#050706', .055)
+
     const camera = new THREE.PerspectiveCamera(32, 1, .1, 100)
-    camera.position.set(0, .8, 8.5)
+    camera.position.set(0, .35, 9.2)
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true })
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
     renderer.outputColorSpace = THREE.SRGBColorSpace
     renderer.toneMapping = THREE.ACESFilmicToneMapping
-    renderer.toneMappingExposure = 1.15
+    renderer.toneMappingExposure = 1.22
+    renderer.shadowMap.enabled = false
     container.appendChild(renderer.domElement)
+
+    const status = document.createElement('div')
+    status.textContent = `CARGANDO ${config.label}…`
+    Object.assign(status.style, {
+      position: 'absolute',
+      left: '50%',
+      top: '50%',
+      transform: 'translate(-50%,-50%)',
+      zIndex: '7',
+      padding: '9px 12px',
+      border: '1px solid rgba(207,255,26,.28)',
+      borderRadius: '10px',
+      background: 'rgba(4,7,5,.82)',
+      color: '#cfff1a',
+      fontSize: '7px',
+      fontWeight: '900',
+      letterSpacing: '1.4px',
+      pointerEvents: 'none',
+      whiteSpace: 'nowrap'
+    })
+    container.appendChild(status)
 
     const controls = new OrbitControls(camera, renderer.domElement)
     controls.enablePan = false
     controls.enableDamping = true
-    controls.minDistance = 6.2
-    controls.maxDistance = 11
-    controls.target.set(0, .65, 0)
+    controls.dampingFactor = .07
+    controls.minDistance = 5.8
+    controls.maxDistance = 13.5
+    controls.target.set(0, .3, 0)
 
-    scene.add(new THREE.HemisphereLight('#f2f4ed', '#07100a', 1.9))
-    const rim = new THREE.DirectionalLight('#cfff1a', 2.1)
-    rim.position.set(-3, 4, -4)
-    scene.add(rim)
-    const key = new THREE.DirectionalLight('#ffffff', 2.2)
-    key.position.set(4, 5, 6)
+    scene.add(new THREE.HemisphereLight('#eef4e9', '#070907', 1.65))
+
+    const key = new THREE.DirectionalLight('#ffffff', 2.4)
+    key.position.set(4.5, 5.5, 5.5)
     scene.add(key)
 
-    const group = new THREE.Group()
-    group.position.y = .25
-    scene.add(group)
+    const fill = new THREE.DirectionalLight('#94a895', 1.05)
+    fill.position.set(-4, 1, 5)
+    scene.add(fill)
 
-    const muscleMeshes: THREE.Mesh[] = []
-    partSpecs().forEach(spec => {
-      const material = new THREE.MeshStandardMaterial({
-        color: spec.muscle ? inactive : skin,
-        roughness: .58,
-        metalness: spec.muscle ? .08 : .02,
-        emissive: '#000000',
-        emissiveIntensity: 0
-      })
-      const mesh = new THREE.Mesh(spec.geometry, material)
-      mesh.position.set(...spec.position)
-      if (spec.rotation) mesh.rotation.set(...spec.rotation)
-      if (spec.scale) mesh.scale.set(...spec.scale)
-      if (spec.muscle) {
-        mesh.userData.muscle = spec.muscle
-        muscleMeshes.push(mesh)
-      }
-      group.add(mesh)
-    })
+    const rim = new THREE.DirectionalLight('#cfff1a', 1.85)
+    rim.position.set(-3.5, 4, -5)
+    scene.add(rim)
 
     const ground = new THREE.Mesh(
-      new THREE.CircleGeometry(2.2, 64),
-      new THREE.MeshBasicMaterial({ color: '#0d120f', transparent: true, opacity: .75 })
+      new THREE.CircleGeometry(2.25, 80),
+      new THREE.MeshBasicMaterial({ color: '#0b0f0c', transparent: true, opacity: .72 })
     )
     ground.rotation.x = -Math.PI / 2
-    ground.position.y = -1.86
+    ground.position.y = -2.18
     scene.add(ground)
 
     const ring = new THREE.Mesh(
-      new THREE.RingGeometry(1.65, 1.68, 96),
-      new THREE.MeshBasicMaterial({ color: '#cfff1a', transparent: true, opacity: .22, side: THREE.DoubleSide })
+      new THREE.RingGeometry(1.68, 1.705, 120),
+      new THREE.MeshBasicMaterial({ color: '#cfff1a', transparent: true, opacity: .2, side: THREE.DoubleSide })
     )
     ring.rotation.x = -Math.PI / 2
-    ring.position.y = -1.84
+    ring.position.y = -2.16
     scene.add(ring)
+
+    const muscleMeshes: THREE.Mesh[] = []
+    const loader = new GLTFLoader()
+    const draco = new DRACOLoader()
+    draco.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.7/')
+    loader.setDRACOLoader(draco)
+
+    loader.load(
+      config.url,
+      gltf => {
+        if (cancelled) {
+          disposeObject(gltf.scene)
+          return
+        }
+
+        const root = gltf.scene
+        loadedRoot = root
+        if (config.rotateX) root.rotation.x = config.rotateX
+        root.updateMatrixWorld(true)
+
+        let box = new THREE.Box3().setFromObject(root)
+        const size = box.getSize(new THREE.Vector3())
+        const height = Math.max(.001, size.y)
+        const scale = 4.95 / height
+        root.scale.multiplyScalar(scale)
+        root.updateMatrixWorld(true)
+
+        box = new THREE.Box3().setFromObject(root)
+        const center = box.getCenter(new THREE.Vector3())
+        root.position.x -= center.x
+        root.position.z -= center.z
+        root.position.y += -2.1 - box.min.y
+        root.updateMatrixWorld(true)
+
+        root.traverse(object => {
+          if (!(object instanceof THREE.Mesh)) return
+
+          const muscle = muscleFromName(object.name)
+          const tendonLike = isTendonLike(object.name)
+          const baseColor = tendonLike ? tendon : muscle ? inactive : unclassified
+          const material = new THREE.MeshStandardMaterial({
+            color: baseColor,
+            roughness: tendonLike ? .72 : .6,
+            metalness: 0,
+            emissive: '#000000',
+            emissiveIntensity: 0,
+            side: THREE.DoubleSide
+          })
+          object.material = material
+          object.castShadow = false
+          object.receiveShadow = false
+          if (muscle) {
+            object.userData.muscle = muscle
+            muscleMeshes.push(object)
+          }
+        })
+
+        scene.add(root)
+        status.remove()
+      },
+      progress => {
+        if (!progress.total || cancelled) return
+        const pct = Math.min(99, Math.round(progress.loaded / progress.total * 100))
+        status.textContent = `CARGANDO ${config.label} · ${pct}%`
+      },
+      error => {
+        console.error(`Error loading ${config.label}`, error)
+        if (!cancelled) {
+          status.textContent = `NO SE PUDO CARGAR ${config.label}`
+          status.style.color = '#ff8a80'
+          status.style.borderColor = 'rgba(255,138,128,.34)'
+        }
+      }
+    )
 
     const raycaster = new THREE.Raycaster()
     const pointer = new THREE.Vector2()
@@ -164,6 +267,7 @@ export default function BodyModel({ metrics, selectedMuscle, onSelectMuscle }: P
       camera.aspect = width / Math.max(1, height)
       camera.updateProjectionMatrix()
     }
+
     const resizeObserver = new ResizeObserver(resize)
     resizeObserver.observe(container)
     resize()
@@ -172,37 +276,89 @@ export default function BodyModel({ metrics, selectedMuscle, onSelectMuscle }: P
     const animate = () => {
       frame = requestAnimationFrame(animate)
       controls.update()
+
       const metricMap = new Map<MuscleId, MuscleMetric>(metricsRef.current.map(metric => [metric.id, metric]))
       muscleMeshes.forEach(mesh => {
         const muscle = mesh.userData.muscle as MuscleId
         const score = metricMap.get(muscle)?.score ?? 0
+        const intensity = THREE.MathUtils.clamp(score / 100, 0, 1)
         const selected = selectedRef.current === muscle
         const material = mesh.material as THREE.MeshStandardMaterial
-        material.color.copy(inactive).lerp(acid, Math.min(1, score / 100))
+
+        material.color.copy(inactive).lerp(acid, selected ? 1 : intensity * .92)
         material.emissive.copy(acid)
-        material.emissiveIntensity = selected ? .72 : Math.pow(score / 100, 1.3) * .45
+        material.emissiveIntensity = selected ? .78 : Math.pow(intensity, 1.35) * .42
       })
-      ring.rotation.z += .0015
+
+      ring.rotation.z += .0014
       renderer.render(scene, camera)
     }
     animate()
 
     return () => {
+      cancelled = true
       cancelAnimationFrame(frame)
       resizeObserver.disconnect()
       renderer.domElement.removeEventListener('pointerup', handlePointer)
       controls.dispose()
+      draco.dispose()
+      status.remove()
+      if (loadedRoot) {
+        scene.remove(loadedRoot)
+        disposeObject(loadedRoot)
+      }
+      ground.geometry.dispose()
+      ;(ground.material as THREE.Material).dispose()
+      ring.geometry.dispose()
+      ;(ring.material as THREE.Material).dispose()
       renderer.dispose()
-      scene.traverse((object: THREE.Object3D) => {
-        if (object instanceof THREE.Mesh) {
-          object.geometry.dispose()
-          const material = object.material as THREE.Material
-          material.dispose()
-        }
-      })
       renderer.domElement.remove()
     }
-  }, [onSelectMuscle])
+  }, [onSelectMuscle, source])
 
-  return <div className="body-model" ref={host} />
+  const switchButton = (active: boolean) => ({
+    height: 28,
+    padding: '0 9px',
+    borderRadius: 8,
+    border: `1px solid ${active ? '#cfff1a' : 'rgba(255,255,255,.14)'}`,
+    background: active ? 'rgba(207,255,26,.12)' : 'rgba(4,7,5,.78)',
+    color: active ? '#cfff1a' : '#8f9a90',
+    fontSize: 6,
+    fontWeight: 900,
+    letterSpacing: '1px',
+    cursor: 'pointer' as const,
+    backdropFilter: 'blur(8px)'
+  })
+
+  return <div className="body-model">
+    <div ref={host} style={{ position: 'absolute', inset: 0 }} />
+    <div style={{
+      position: 'absolute',
+      zIndex: 7,
+      left: '50%',
+      top: 58,
+      transform: 'translateX(-50%)',
+      display: 'flex',
+      gap: 4,
+      padding: 4,
+      borderRadius: 10,
+      border: '1px solid rgba(255,255,255,.1)',
+      background: 'rgba(3,5,4,.58)',
+      backdropFilter: 'blur(10px)',
+      whiteSpace: 'nowrap'
+    }}>
+      <button style={switchButton(source === 'zanatomy')} onClick={() => setSource('zanatomy')}>Z-ANATOMY</button>
+      <button style={switchButton(source === 'hbe')} onClick={() => setSource('hbe')}>HBE · BODYPARTS3D</button>
+    </div>
+    <div style={{
+      position: 'absolute',
+      zIndex: 4,
+      right: 16,
+      bottom: 9,
+      color: '#667068',
+      fontSize: 5,
+      letterSpacing: '1px',
+      pointerEvents: 'none'
+    }}>{SOURCES[source].credit}</div>
+  </div>
 }
