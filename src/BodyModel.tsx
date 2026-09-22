@@ -332,6 +332,11 @@ export default function BodyModel({ metrics, selectedMuscle, selectedAnatomyKey,
     let gestureMoved = false
     let multiState: { midX: number; midY: number; distance: number } | null = null
 
+    const consumeTouch = (event: PointerEvent) => {
+      event.preventDefault()
+      event.stopImmediatePropagation()
+    }
+
     const selectAtPointer = (event: PointerEvent) => {
       const rect = renderer.domElement.getBoundingClientRect()
       pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1
@@ -422,8 +427,7 @@ export default function BodyModel({ metrics, selectedMuscle, selectedAnatomyKey,
       activePointers.set(event.pointerId, state)
 
       if (event.pointerType === 'touch') {
-        event.preventDefault()
-        event.stopPropagation()
+        consumeTouch(event)
         try { renderer.domElement.setPointerCapture(event.pointerId) } catch { /* noop */ }
         const touches = touchPointers()
         if (touches.length === 2) {
@@ -444,11 +448,9 @@ export default function BodyModel({ metrics, selectedMuscle, selectedAnatomyKey,
       activePointers.set(event.pointerId, state)
 
       if (Math.hypot(state.x - state.startX, state.y - state.startY) > 5) gestureMoved = true
-
       if (event.pointerType !== 'touch') return
 
-      event.preventDefault()
-      event.stopPropagation()
+      consumeTouch(event)
       const touches = touchPointers()
       if (touches.length === 1) {
         multiState = null
@@ -465,8 +467,7 @@ export default function BodyModel({ metrics, selectedMuscle, selectedAnatomyKey,
       const isTap = Boolean(state) && pointerCountBeforeUp === 1 && !gestureMoved
 
       if (event.pointerType === 'touch') {
-        event.preventDefault()
-        event.stopPropagation()
+        consumeTouch(event)
         try { renderer.domElement.releasePointerCapture(event.pointerId) } catch { /* noop */ }
       }
 
@@ -479,10 +480,7 @@ export default function BodyModel({ metrics, selectedMuscle, selectedAnatomyKey,
     }
 
     const handlePointerCancel = (event: PointerEvent) => {
-      if (event.pointerType === 'touch') {
-        event.preventDefault()
-        event.stopPropagation()
-      }
+      if (event.pointerType === 'touch') consumeTouch(event)
       activePointers.delete(event.pointerId)
       multiState = null
       if (activePointers.size === 0) gestureMoved = false
