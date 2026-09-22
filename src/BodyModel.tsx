@@ -2,7 +2,6 @@ import { useEffect, useRef } from 'react'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
-import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js'
 import type { MuscleId, MuscleMetric } from './types'
 
 interface Props {
@@ -11,39 +10,31 @@ interface Props {
   onSelectMuscle: (muscle?: MuscleId) => void
 }
 
-const BODY_MODEL_URL = 'https://raw.githubusercontent.com/JohanBellander/BodyExplorer/main/public/anatomy.glb'
+const BODY_MODEL_URL = `${import.meta.env.BASE_URL}models/bodyparts-yose.glb`
 const acid = new THREE.Color('#cfff1a')
-const unclassified = new THREE.Color('#202622')
-const tendon = new THREE.Color('#373d38')
+const unclassified = new THREE.Color('#171d19')
+const tendon = new THREE.Color('#3a433c')
 
 const MUSCLE_BASE: Record<MuscleId, string> = {
-  chest: '#5c675f',
-  lats: '#465249',
-  upper_back: '#505b53',
-  lower_back: '#465149',
-  traps: '#59635b',
-  front_delts: '#606a62',
-  side_delts: '#5d685f',
-  rear_delts: '#566159',
-  biceps: '#5b665f',
-  triceps: '#515d55',
-  forearms: '#4c5850',
-  quads: '#5e6961',
-  hamstrings: '#515d55',
-  glutes: '#566159',
-  calves: '#536057',
-  adductors: '#4c5850',
-  abs: '#535f57',
-  obliques: '#4b574f'
+  chest: '#4a564d',
+  lats: '#354139',
+  upper_back: '#3c483f',
+  lower_back: '#354038',
+  traps: '#465248',
+  front_delts: '#4e5a50',
+  side_delts: '#4a574d',
+  rear_delts: '#424e45',
+  biceps: '#465249',
+  triceps: '#3d4941',
+  forearms: '#37433b',
+  quads: '#49564c',
+  hamstrings: '#3d4941',
+  glutes: '#424e45',
+  calves: '#3f4c43',
+  adductors: '#37433b',
+  abs: '#3f4b42',
+  obliques: '#37433b'
 }
-
-const HEAD_NECK_TERMS = [
-  'head', 'face', 'facial', 'skull', 'cranium', 'scalp', 'eye', 'orbital', 'palpebrae',
-  'frontalis', 'occipitalis', 'temporalis', 'masseter', 'pterygoid', 'orbicularis', 'zygomatic',
-  'mentalis', 'nasalis', 'risorius', 'auricular', 'tongue', 'lingual', 'phary', 'laryn', 'hyoid',
-  'digastric', 'mylohyoid', 'geniohyoid', 'stylohyoid', 'sternohyoid', 'thyrohyoid', 'omohyoid',
-  'sternocleidomastoid', 'scalen', 'splenius capitis', 'longus capitis', 'rectus capitis'
-]
 
 function normalizeName(name: string) {
   return name.toLowerCase().replace(/[_.-]+/g, ' ').replace(/\s+/g, ' ').trim()
@@ -87,20 +78,6 @@ function muscleFromName(rawName: string): MuscleId | undefined {
 function isTendonLike(name: string) {
   const n = normalizeName(name)
   return n.includes('tendon') || n.includes('ligament') || n.includes('fascia') || n.includes('retinaculum') || n.includes('aponeuros') || n.includes('membrane')
-}
-
-function shouldHideHead(mesh: THREE.Mesh, muscle?: MuscleId) {
-  if (muscle) return false
-  const name = normalizeName(mesh.name)
-  if (HEAD_NECK_TERMS.some(term => name.includes(term))) return true
-
-  const bounds = new THREE.Box3().setFromObject(mesh)
-  if (bounds.isEmpty()) return false
-  const center = bounds.getCenter(new THREE.Vector3())
-  const size = bounds.getSize(new THREE.Vector3())
-
-  // Fallback for anonymous BodyParts3D meshes in the head zone.
-  return bounds.min.y > 1.55 && center.y > 1.72 && size.y < 1.45
 }
 
 function disposeObject(root: THREE.Object3D) {
@@ -183,26 +160,26 @@ export default function BodyModel({ metrics, selectedMuscle, onSelectMuscle }: P
     controls.maxDistance = 13.5
     controls.target.set(0, .08, 0)
 
-    scene.add(new THREE.AmbientLight('#b8c0b7', .2))
-    scene.add(new THREE.HemisphereLight('#d5ddd3', '#010302', 1.0))
+    scene.add(new THREE.AmbientLight('#b8c0b7', .16))
+    scene.add(new THREE.HemisphereLight('#cbd5ca', '#010302', .92))
 
-    const key = new THREE.DirectionalLight('#eef2eb', 2.15)
+    const key = new THREE.DirectionalLight('#e7ece5', 1.9)
     key.position.set(4.8, 5.8, 6.2)
     scene.add(key)
 
-    const soft = new THREE.DirectionalLight('#637268', .7)
+    const soft = new THREE.DirectionalLight('#58685d', .58)
     soft.position.set(-4.2, .8, 4.5)
     scene.add(soft)
 
-    const rim = new THREE.DirectionalLight('#cfff1a', 2.75)
+    const rim = new THREE.DirectionalLight('#cfff1a', 3.05)
     rim.position.set(-4.4, 4.2, -5.5)
     scene.add(rim)
 
-    const backRim = new THREE.DirectionalLight('#aab5aa', .78)
+    const backRim = new THREE.DirectionalLight('#9ca99d', .7)
     backRim.position.set(4, 2.2, -5)
     scene.add(backRim)
 
-    const halo = new THREE.PointLight('#cfff1a', .72, 8, 2)
+    const halo = new THREE.PointLight('#cfff1a', .76, 8, 2)
     halo.position.set(0, .55, -3.2)
     scene.add(halo)
 
@@ -210,22 +187,22 @@ export default function BodyModel({ metrics, selectedMuscle, onSelectMuscle }: P
     ritual.position.set(0, .25, -1.45)
     ritual.scale.set(1, 1.08, 1)
     const ritualLines = [
-      makeLine(circlePoints(1.58), '#cfff1a', .085, true),
-      makeLine(circlePoints(1.12), '#cbd2c9', .055, true),
+      makeLine(circlePoints(1.58), '#cfff1a', .09, true),
+      makeLine(circlePoints(1.12), '#cbd2c9', .05, true),
       makeLine([
         new THREE.Vector3(0, 1.58, 0),
         new THREE.Vector3(-1.02, -1.18, 0),
         new THREE.Vector3(1.02, -1.18, 0)
-      ], '#cbd2c9', .07, true),
-      makeLine([new THREE.Vector3(0, -1.72, 0), new THREE.Vector3(0, 1.72, 0)], '#cfff1a', .06),
-      makeLine([new THREE.Vector3(-1.42, .12, 0), new THREE.Vector3(1.42, .12, 0)], '#cbd2c9', .045)
+      ], '#cbd2c9', .065, true),
+      makeLine([new THREE.Vector3(0, -1.72, 0), new THREE.Vector3(0, 1.72, 0)], '#cfff1a', .055),
+      makeLine([new THREE.Vector3(-1.42, .12, 0), new THREE.Vector3(1.42, .12, 0)], '#cbd2c9', .04)
     ]
     ritualLines.forEach(line => ritual.add(line))
     scene.add(ritual)
 
     const ground = new THREE.Mesh(
       new THREE.CircleGeometry(2.35, 96),
-      new THREE.MeshBasicMaterial({ color: '#060a07', transparent: true, opacity: .86 })
+      new THREE.MeshBasicMaterial({ color: '#050806', transparent: true, opacity: .88 })
     )
     ground.rotation.x = -Math.PI / 2
     ground.position.y = -2.19
@@ -241,7 +218,7 @@ export default function BodyModel({ metrics, selectedMuscle, onSelectMuscle }: P
 
     const outerRing = new THREE.Mesh(
       new THREE.RingGeometry(2.12, 2.125, 128),
-      new THREE.MeshBasicMaterial({ color: '#9fab9f', transparent: true, opacity: .06, side: THREE.DoubleSide })
+      new THREE.MeshBasicMaterial({ color: '#9fab9f', transparent: true, opacity: .055, side: THREE.DoubleSide })
     )
     outerRing.rotation.x = -Math.PI / 2
     outerRing.position.y = -2.165
@@ -249,9 +226,6 @@ export default function BodyModel({ metrics, selectedMuscle, onSelectMuscle }: P
 
     const muscleMeshes: THREE.Mesh[] = []
     const loader = new GLTFLoader()
-    const draco = new DRACOLoader()
-    draco.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.7/')
-    loader.setDRACOLoader(draco)
 
     loader.load(
       BODY_MODEL_URL,
@@ -283,24 +257,20 @@ export default function BodyModel({ metrics, selectedMuscle, onSelectMuscle }: P
         root.traverse(object => {
           if (!(object instanceof THREE.Mesh)) return
 
-          const muscle = muscleFromName(object.name)
-          if (shouldHideHead(object, muscle)) {
-            object.visible = false
-            return
-          }
-
+          const embeddedGroup = object.userData.yoseGroup as MuscleId | null | undefined
+          const muscle = embeddedGroup || muscleFromName(object.name)
+          const tendonLike = object.userData.yoseRole === 'tendon' || isTendonLike(object.name)
           const oldMaterials = Array.isArray(object.material) ? object.material : [object.material]
-          const tendonLike = isTendonLike(object.name)
           const baseColor = muscle ? new THREE.Color(MUSCLE_BASE[muscle]) : tendonLike ? tendon : unclassified
 
           const material = new THREE.MeshStandardMaterial({
             color: baseColor,
-            roughness: tendonLike ? .95 : muscle ? .76 : .9,
-            metalness: muscle ? .045 : 0,
-            emissive: muscle ? '#0e140f' : '#000000',
-            emissiveIntensity: muscle ? .055 : 0,
+            roughness: tendonLike ? .97 : muscle ? .8 : .94,
+            metalness: muscle ? .04 : 0,
+            emissive: muscle ? '#0b100c' : '#000000',
+            emissiveIntensity: muscle ? .035 : 0,
             transparent: tendonLike,
-            opacity: tendonLike ? .32 : 1,
+            opacity: tendonLike ? .26 : 1,
             depthWrite: !tendonLike,
             side: THREE.DoubleSide
           })
@@ -326,9 +296,9 @@ export default function BodyModel({ metrics, selectedMuscle, onSelectMuscle }: P
         status.textContent = `CARGANDO CORPUS · ${pct}%`
       },
       error => {
-        console.error('Error loading BodyParts3D', error)
+        console.error('Error loading Yose corpus', error)
         if (!cancelled) {
-          status.textContent = 'NO SE PUDO CARGAR EL MODELO'
+          status.textContent = 'NO SE PUDO CARGAR EL CORPUS'
           status.style.color = '#ff8a80'
           status.style.borderColor = 'rgba(255,138,128,.34)'
         }
@@ -373,14 +343,14 @@ export default function BodyModel({ metrics, selectedMuscle, onSelectMuscle }: P
         const material = mesh.material as THREE.MeshStandardMaterial
         const baseColor = mesh.userData.baseColor as THREE.Color
 
-        material.color.copy(baseColor).lerp(acid, selected ? 1 : Math.pow(intensity, .88) * .94)
+        material.color.copy(baseColor).lerp(acid, selected ? 1 : Math.pow(intensity, .84) * .96)
         material.emissive.copy(acid)
-        material.emissiveIntensity = selected ? 1.05 : Math.pow(intensity, 1.25) * .58
-        material.roughness = selected ? .44 : .76 - intensity * .17
+        material.emissiveIntensity = selected ? 1.12 : Math.pow(intensity, 1.2) * .62
+        material.roughness = selected ? .4 : .8 - intensity * .2
       })
 
       const t = performance.now()
-      halo.intensity = .68 + Math.sin(t * .0011) * .08
+      halo.intensity = .72 + Math.sin(t * .0011) * .09
       ritual.rotation.z = Math.sin(t * .00009) * .035
       ring.rotation.z += .00115
       outerRing.rotation.z -= .0005
@@ -394,7 +364,6 @@ export default function BodyModel({ metrics, selectedMuscle, onSelectMuscle }: P
       resizeObserver.disconnect()
       renderer.domElement.removeEventListener('pointerup', handlePointer)
       controls.dispose()
-      draco.dispose()
       status.remove()
       if (loadedRoot) {
         scene.remove(loadedRoot)
@@ -417,6 +386,6 @@ export default function BodyModel({ metrics, selectedMuscle, onSelectMuscle }: P
 
   return <div className="body-model">
     <div ref={host} className="body-model-stage" />
-    <div className="body-model-credit">BODYPARTS3D · CORPUS MAP</div>
+    <div className="body-model-credit">YOSE CORPUS · BODYPARTS3D</div>
   </div>
 }
