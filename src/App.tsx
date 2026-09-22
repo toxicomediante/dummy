@@ -29,7 +29,6 @@ function RitualHeader() {
         <g className="ritual-moon-layer">
           <image href={ritualMoon} x="134" y="31" width="92" height="92" preserveAspectRatio="xMidYMid meet" className="ritual-moon-image" />
         </g>
-
         <g className="ritual-lines ritual-structure">
           <path d="M180 4v138"/>
           <path d="M90 86h180"/>
@@ -39,7 +38,6 @@ function RitualHeader() {
           <path d="M144 20a50 50 0 0 0 72 0 43 43 0 0 1-72 0Z"/>
           <path d="M155 20c8 8 17 12 25 12s17-4 25-12"/>
         </g>
-
         <circle className="ritual-core" cx="180" cy="77" r="13"/>
       </g>
     </svg>
@@ -57,6 +55,8 @@ export default function App() {
   const [period, setPeriod] = useState<(typeof PERIODS)[number]>(30)
   const [exercise, setExercise] = useState('ALL')
   const [selectedMuscle, setSelectedMuscle] = useState<MuscleId | undefined>()
+  const [selectedAnatomyKey, setSelectedAnatomyKey] = useState<string | undefined>()
+  const [selectedAnatomyLabel, setSelectedAnatomyLabel] = useState<string | undefined>()
   const [notice, setNotice] = useState(rows.length ? `${rows.length} SERIES CARGADAS` : 'SIN DATOS IMPORTADOS')
   const inputRef = useRef<HTMLInputElement | null>(null)
 
@@ -98,15 +98,31 @@ export default function App() {
     }
   }
 
+  const clearSelection = () => {
+    setSelectedMuscle(undefined)
+    setSelectedAnatomyKey(undefined)
+    setSelectedAnatomyLabel(undefined)
+  }
+
   const clearData = () => {
     setRows([])
     saveRows([])
     setExercise('ALL')
-    setSelectedMuscle(undefined)
+    clearSelection()
     setNotice('DATOS ELIMINADOS')
   }
 
-  const onSelectMuscle = useCallback((muscle?: MuscleId) => setSelectedMuscle(muscle), [])
+  const onSelectMuscle = useCallback((muscle?: MuscleId, anatomyKey?: string, anatomyLabel?: string) => {
+    setSelectedMuscle(muscle)
+    setSelectedAnatomyKey(anatomyKey)
+    setSelectedAnatomyLabel(anatomyLabel)
+  }, [])
+
+  const selectMetricGroup = (muscle: MuscleId) => {
+    setSelectedMuscle(muscle)
+    setSelectedAnatomyKey(undefined)
+    setSelectedAnatomyLabel(undefined)
+  }
 
   return <main className="app-shell">
     <section className="phone-surface home-screen">
@@ -127,18 +143,23 @@ export default function App() {
       <div className="intro">
         <p>VOLUMEN · FRECUENCIA · DISTRIBUCIÓN</p>
         <h1>MAPA MUSCULAR</h1>
-        <span>1 DEDO ROTA · 2 DEDOS MUEVEN / ZOOM · TOCA PARA SELECCIONAR</span>
+        <span>1 DEDO ROTA · 2 DEDOS DESPLAZAN / ZOOM · TOCA UN MÚSCULO</span>
       </div>
 
       <section className="model-card">
         <div className="scanlines" />
-        <BodyModel metrics={metrics} selectedMuscle={selectedMuscle} onSelectMuscle={onSelectMuscle} />
+        <BodyModel
+          metrics={metrics}
+          selectedMuscle={selectedMuscle}
+          selectedAnatomyKey={selectedAnatomyKey}
+          onSelectMuscle={onSelectMuscle}
+        />
         <div className="model-hud model-hud-left"><b>{sessionCount}</b><span>SESIONES</span></div>
         <div className="model-hud model-hud-right"><b>{formatVolume(totalVolume)}</b><span>KG VOLUMEN</span></div>
         {selectedMetric && <div className="muscle-tooltip">
-          <small>GRUPO SELECCIONADO</small>
-          <strong>{selectedMetric.label.toUpperCase()}</strong>
-          <span>{selectedMetric.score}% ACTIVACIÓN RELATIVA</span>
+          <small>{selectedAnatomyLabel ? 'MÚSCULO SELECCIONADO' : 'GRUPO DE ENTRENAMIENTO'}</small>
+          <strong>{(selectedAnatomyLabel || selectedMetric.label).toUpperCase()}</strong>
+          <span>{selectedMetric.score}% ACTIVACIÓN · {selectedMetric.label.toUpperCase()}</span>
         </div>}
       </section>
 
@@ -158,7 +179,7 @@ export default function App() {
 
       <section className="muscle-list">
         <div className="section-label"><span>ACTIVACIÓN RELATIVA</span><i /></div>
-        {activeMetrics.length ? activeMetrics.slice(0, 8).map(metric => <button key={metric.id} className={selectedMuscle === metric.id ? 'selected' : ''} onClick={() => setSelectedMuscle(metric.id)}>
+        {activeMetrics.length ? activeMetrics.slice(0, 8).map(metric => <button key={metric.id} className={selectedMuscle === metric.id && !selectedAnatomyKey ? 'selected' : ''} onClick={() => selectMetricGroup(metric.id)}>
           <div><strong>{metric.label}</strong><small>{metric.sessions} sesiones · {Math.round(metric.sets)} series ponderadas</small></div>
           <span className="bar"><i style={{ width: `${metric.score}%` }} /></span>
           <b>{metric.score}</b>
