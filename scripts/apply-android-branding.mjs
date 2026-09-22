@@ -2,8 +2,7 @@ import { copyFile, mkdir, rm, writeFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 
 const res = resolve('android/app/src/main/res')
-const foreground = resolve('assets/android/dummy-icon-foreground.webp')
-const legacy = resolve('assets/android/dummy-icon-legacy.webp')
+const source = resolve('public/branding/dummy-icon-source.png')
 
 const mipmapNodpi = resolve(res, 'mipmap-nodpi')
 const drawableNodpi = resolve(res, 'drawable-nodpi')
@@ -15,14 +14,15 @@ for (const directory of [mipmapNodpi, drawableNodpi, adaptive, values]) {
 }
 
 // Remove Capacitor's generated density-specific launchers so Android cannot fall
-// back to the default square icon on some launchers.
+// back to its default icon on some launchers.
 for (const density of ['mdpi', 'hdpi', 'xhdpi', 'xxhdpi', 'xxxhdpi']) {
   await rm(resolve(res, `mipmap-${density}`), { recursive: true, force: true })
 }
 
-await copyFile(legacy, resolve(mipmapNodpi, 'ic_launcher.webp'))
-await copyFile(legacy, resolve(mipmapNodpi, 'ic_launcher_round.webp'))
-await copyFile(foreground, resolve(drawableNodpi, 'dummy_icon_foreground.webp'))
+// The repository PNG is the single source of truth for Dummy branding.
+await copyFile(source, resolve(mipmapNodpi, 'ic_launcher.png'))
+await copyFile(source, resolve(mipmapNodpi, 'ic_launcher_round.png'))
+await copyFile(source, resolve(drawableNodpi, 'dummy_icon_foreground.png'))
 
 await writeFile(resolve(values, 'dummy_icon_colors.xml'), `<?xml version="1.0" encoding="utf-8"?>
 <resources>
@@ -40,4 +40,4 @@ const adaptiveXml = `<?xml version="1.0" encoding="utf-8"?>
 await writeFile(resolve(adaptive, 'ic_launcher.xml'), adaptiveXml)
 await writeFile(resolve(adaptive, 'ic_launcher_round.xml'), adaptiveXml)
 
-console.log('Dummy Android adaptive launcher icon applied.')
+console.log('Dummy Android launcher icon applied from public/branding/dummy-icon-source.png.')
