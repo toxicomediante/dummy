@@ -32,14 +32,13 @@ const HEAD_NECK_TERMS = [
   'frontalis', 'occipitalis', 'temporalis', 'masseter', 'pterygoid', 'orbicularis',
   'zygomatic', 'buccinator', 'mentalis', 'nasalis', 'risorius', 'auricular', 'corrugator',
   'procerus', 'platysma', 'palpebrae', 'ocular', 'orbital', 'eyelid', 'scalp', 'facial',
-  'levator labii', 'depressor labii', 'depressor anguli', 'anguli oris', 'supercilii',
-  'superior rectus', 'inferior rectus', 'medial rectus', 'lateral rectus',
-  'superior oblique', 'inferior oblique', 'levator palpebrae',
+  'inferior rectus', 'superior rectus', 'medial rectus', 'lateral rectus',
+  'inferior oblique', 'superior oblique', 'levator palpebrae',
+  'levator labii', 'depressor labii', 'depressor anguli oris', 'levator anguli oris',
   'tongue', 'genioglossus', 'hyoglossus', 'styloglossus', 'palatoglossus', 'phary', 'laryn',
-  'palatini', 'palatopharyngeus', 'salpingopharyngeus', 'stylopharyngeus',
-  'tensor tympani', 'stapedius', 'arytenoid', 'cricothyroid', 'thyroarytenoid', 'cricoarytenoid',
+  'palatini', 'uvulae', 'stylopharyngeus', 'salpingopharyngeus', 'palatopharyngeus',
   'digastric', 'mylohyoid', 'geniohyoid', 'stylohyoid', 'sternohyoid', 'thyrohyoid', 'omohyoid',
-  'hyoid', 'sternocleidomastoid', 'scalen', 'longus colli', 'longus capitis', 'splenius capitis',
+  'sternocleidomastoid', 'scalen', 'longus colli', 'longus capitis', 'splenius capitis',
   'semispinalis capitis', 'spinalis capitis', 'rectus capitis', 'obliquus capitis', 'suboccipital',
   'capitis', 'colli'
 ]
@@ -56,22 +55,29 @@ function normalizeName(value = '') {
 function classifyGroup(rawName) {
   const n = normalizeName(rawName)
 
-  if (n.includes('pectoralis') || n.includes('serratus anterior')) return 'chest'
+  // Deliberately strict. The analytics groups are not permission to relabel nearby muscles.
+  if (n.includes('pectoralis')) return 'chest'
   if (n.includes('rectus abdominis') || n.includes('transversus abdominis')) return 'abs'
-  if (n.includes('external oblique') || n.includes('internal oblique') || n.includes('obliquus')) return 'obliques'
+  if (n.includes('external oblique') || n.includes('internal oblique')) return 'obliques'
   if (n.includes('latissimus')) return 'lats'
-  if (n.includes('trapezius') || n.includes('levator scapulae')) return 'traps'
-  if (n.includes('rhomboid') || n.includes('supraspinatus') || n.includes('infraspinatus') || n.includes('teres major') || n.includes('teres minor')) return 'upper_back'
-  if (n.includes('erector spinae') || n.includes('iliocostalis') || n.includes('longissimus') || n.includes('spinalis') || n.includes('multifidus') || n.includes('quadratus lumborum')) return 'lower_back'
+  if (n.includes('trapezius')) return 'traps'
+  if (n.includes('rhomboid')) return 'upper_back'
+  if (
+    n.includes('erector spinae') || n.includes('iliocostalis') ||
+    n.includes('longissimus thoracis') || n.includes('longissimus lumborum') ||
+    n.includes('spinalis thoracis') || n.includes('multifidus thoracis') ||
+    n.includes('multifidus lumborum') || n.includes('quadratus lumborum')
+  ) return 'lower_back'
 
   if (n.includes('deltoid')) {
     if (n.includes('anterior') || n.includes('clavicular')) return 'front_delts'
     if (n.includes('posterior') || n.includes('spinal')) return 'rear_delts'
+    if (n.includes('acromial')) return 'side_delts'
     return 'side_delts'
   }
 
-  if (n.includes('biceps brachii') || n.includes('brachialis') || n.includes('coracobrachialis')) return 'biceps'
-  if (n.includes('triceps brachii') || n.includes('anconeus')) return 'triceps'
+  if (n.includes('biceps brachii')) return 'biceps'
+  if (n.includes('triceps brachii')) return 'triceps'
   if (
     n.includes('brachioradialis') || n.includes('pronator') || n.includes('supinator') ||
     n.includes('flexor carpi') || n.includes('extensor carpi') || n.includes('flexor digitorum') ||
@@ -80,12 +86,100 @@ function classifyGroup(rawName) {
   ) return 'forearms'
 
   if (n.includes('gluteus')) return 'glutes'
-  if (n.includes('rectus femoris') || n.includes('vastus') || n.includes('sartorius')) return 'quads'
+  if (n.includes('rectus femoris') || n.includes('vastus')) return 'quads'
   if (n.includes('biceps femoris') || n.includes('semitendinosus') || n.includes('semimembranosus')) return 'hamstrings'
   if (n.includes('adductor') || n.includes('gracilis') || n.includes('pectineus')) return 'adductors'
-  if (n.includes('gastrocnemius') || n.includes('soleus') || n.includes('plantaris') || n.includes('tibialis') || n.includes('fibularis') || n.includes('peroneus')) return 'calves'
+  if (n.includes('gastrocnemius') || n.includes('soleus') || n.includes('plantaris')) return 'calves'
 
   return undefined
+}
+
+function sideSuffix(n) {
+  if (/\bleft\b/.test(n)) return ' · IZQ.'
+  if (/\bright\b/.test(n)) return ' · DCHA.'
+  return ''
+}
+
+function anatomyLabel(rawName) {
+  const n = normalizeName(rawName)
+  const side = sideSuffix(n)
+  const rules = [
+    [/clavicular part.*pectoralis major|pectoralis major.*clavicular/, 'Pectoral mayor · porción clavicular'],
+    [/sternocostal part.*pectoralis major|pectoralis major.*sternocostal/, 'Pectoral mayor · porción esternocostal'],
+    [/abdominal part.*pectoralis major|pectoralis major.*abdominal/, 'Pectoral mayor · porción abdominal'],
+    [/pectoralis major/, 'Pectoral mayor'],
+    [/pectoralis minor/, 'Pectoral menor'],
+    [/rectus abdominis/, 'Recto abdominal'],
+    [/transversus abdominis/, 'Transverso abdominal'],
+    [/external oblique/, 'Oblicuo externo'],
+    [/internal oblique/, 'Oblicuo interno'],
+    [/latissimus/, 'Dorsal ancho'],
+    [/descending part.*trapezius/, 'Trapecio superior'],
+    [/transverse part.*trapezius/, 'Trapecio medio'],
+    [/ascending part.*trapezius/, 'Trapecio inferior'],
+    [/trapezius/, 'Trapecio'],
+    [/rhomboid major/, 'Romboide mayor'],
+    [/rhomboid minor/, 'Romboide menor'],
+    [/quadratus lumborum/, 'Cuadrado lumbar'],
+    [/iliocostalis/, 'Iliocostal'],
+    [/longissimus/, 'Longísimo'],
+    [/spinalis/, 'Espinoso'],
+    [/multifidus/, 'Multífido'],
+    [/clavicular part.*deltoid|deltoid.*clavicular/, 'Deltoide anterior'],
+    [/acromial part.*deltoid|deltoid.*acromial/, 'Deltoide lateral'],
+    [/spinal part.*deltoid|deltoid.*spinal/, 'Deltoide posterior'],
+    [/long head.*biceps brachii/, 'Bíceps · cabeza larga'],
+    [/short head.*biceps brachii/, 'Bíceps · cabeza corta'],
+    [/biceps brachii/, 'Bíceps braquial'],
+    [/long head.*triceps brachii/, 'Tríceps · cabeza larga'],
+    [/lateral head.*triceps brachii/, 'Tríceps · cabeza lateral'],
+    [/medial head.*triceps brachii/, 'Tríceps · cabeza medial'],
+    [/triceps brachii/, 'Tríceps braquial'],
+    [/brachioradialis/, 'Braquiorradial'],
+    [/pronator teres/, 'Pronador redondo'],
+    [/pronator quadratus/, 'Pronador cuadrado'],
+    [/supinator/, 'Supinador'],
+    [/flexor carpi radialis/, 'Flexor radial del carpo'],
+    [/flexor carpi ulnaris/, 'Flexor cubital del carpo'],
+    [/extensor carpi radialis longus/, 'Extensor radial largo del carpo'],
+    [/extensor carpi radialis brevis/, 'Extensor radial corto del carpo'],
+    [/extensor carpi ulnaris/, 'Extensor cubital del carpo'],
+    [/flexor digitorum superficialis/, 'Flexor superficial de los dedos'],
+    [/flexor digitorum profundus/, 'Flexor profundo de los dedos'],
+    [/extensor digitorum/, 'Extensor de los dedos'],
+    [/palmaris longus/, 'Palmar largo'],
+    [/gluteus maximus/, 'Glúteo mayor'],
+    [/gluteus medius/, 'Glúteo medio'],
+    [/gluteus minimus/, 'Glúteo menor'],
+    [/rectus femoris/, 'Recto femoral'],
+    [/vastus lateralis/, 'Vasto lateral'],
+    [/vastus medialis/, 'Vasto medial'],
+    [/vastus intermedius/, 'Vasto intermedio'],
+    [/biceps femoris/, 'Bíceps femoral'],
+    [/semitendinosus/, 'Semitendinoso'],
+    [/semimembranosus/, 'Semimembranoso'],
+    [/adductor magnus/, 'Aductor mayor'],
+    [/adductor longus/, 'Aductor largo'],
+    [/adductor brevis/, 'Aductor corto'],
+    [/gracilis/, 'Grácil'],
+    [/pectineus/, 'Pectíneo'],
+    [/lateral head.*gastrocnemius/, 'Gastrocnemio · cabeza lateral'],
+    [/medial head.*gastrocnemius/, 'Gastrocnemio · cabeza medial'],
+    [/gastrocnemius/, 'Gastrocnemio'],
+    [/soleus/, 'Sóleo'],
+    [/plantaris/, 'Plantar']
+  ]
+
+  const label = rules.find(([pattern]) => pattern.test(n))?.[1]
+  if (label) return `${label}${side}`
+
+  const cleaned = rawName
+    .replace(/\bleft\b/gi, '')
+    .replace(/\bright\b/gi, '')
+    .replace(/\bmuscle\b/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+  return `${cleaned || rawName}${side}`
 }
 
 function removalReason(rawName) {
@@ -169,6 +263,7 @@ for (const node of [...root.listNodes()]) {
   const mappingEntry = mappingByName.get(normalized)
   const tendon = looksLikeTendon(name, mappingEntry)
   const group = tendon ? undefined : classifyGroup(name)
+  const exactLabel = anatomyLabel(name)
 
   if (group) {
     keptSelectable++
@@ -184,6 +279,8 @@ for (const node of [...root.listNodes()]) {
     yoseGroup: group || null,
     yoseRole: tendon ? 'tendon' : group ? 'muscle' : 'support',
     yoseSelectable: Boolean(group),
+    yoseAnatomyKey: normalized,
+    yoseLabel: exactLabel,
     bpId: mappingEntry?.bpId || null,
     fmaId: mappingEntry?.fmaId || null
   })
