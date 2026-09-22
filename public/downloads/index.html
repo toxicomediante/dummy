@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#050706" />
+  <title>DUMMY · Descargar APK</title>
+  <style>
+    :root{color-scheme:dark}
+    *{box-sizing:border-box}
+    body{margin:0;min-height:100vh;display:grid;place-items:center;background:#050706;color:#eef2ec;font-family:Inter,system-ui,sans-serif;padding:24px}
+    main{width:min(520px,100%);border:1px solid #243026;border-radius:22px;padding:28px;background:radial-gradient(circle at 50% 15%,#172115 0,#0d120f 32%,#070907 74%);box-shadow:0 20px 70px #000}
+    .sigil{width:86px;height:86px;border:1px solid #bfff18;border-radius:50%;display:grid;place-items:center;margin:0 auto 18px;color:#d2ff1a;font-size:34px;box-shadow:0 0 34px #bfff1830;position:relative}
+    .sigil:before,.sigil:after{content:"";position:absolute;background:#d2ff1a55}.sigil:before{width:1px;height:112px}.sigil:after{height:1px;width:112px}
+    h1{font-size:28px;letter-spacing:.14em;text-align:center;margin:0 0 4px}
+    .sub{font-size:10px;letter-spacing:.38em;text-align:center;color:#8d998f;margin:0 0 22px}
+    p{text-align:center;color:#9aa59c;line-height:1.55;margin:0 0 24px}
+    a{display:block;text-decoration:none;text-align:center;font-weight:900;letter-spacing:.1em;border-radius:14px;padding:16px}
+    .download{background:#d2ff1a;color:#071006;box-shadow:0 0 30px #d2ff1a18}
+    .back{margin-top:10px;border:1px solid #28352b;color:#dce4dd}
+    small{display:block;text-align:center;color:#667168;margin-top:18px;line-height:1.5}
+  </style>
+</head>
+<body>
+  <main>
+    <div class="sigil">◇</div>
+    <h1>DUMMY</h1>
+    <div class="sub">YOSE'S PROJECT</div>
+    <p>Primera compilación Android experimental de DUMMY. Incluye el Corpus Yose, el mapa muscular 3D y el nuevo icono adaptativo.</p>
+    <a id="apk-download" class="download" href="https://github.com/toxicomediante/dummy/releases/download/test-build/DUMMY.apk">DESCARGAR APK</a>
+    <a class="back" href="../">VOLVER A LA APP</a>
+    <small>Build experimental · Android</small>
+  </main>
+  <script>
+    const apk = document.getElementById('apk-download');
+    apk.addEventListener('click', () => {
+      apk.href = 'https://github.com/toxicomediante/dummy/releases/download/test-build/DUMMY.apk?v=' + Date.now();
+    });
+  </script>
+</body>
+</html>
