@@ -24,6 +24,7 @@
     "@capacitor/cli": "latest",
     "@types/react": "latest",
     "@types/react-dom": "latest",
+    "@types/three": "latest",
     "@vitejs/plugin-react": "latest",
     "typescript": "latest",
     "vite": "latest"
