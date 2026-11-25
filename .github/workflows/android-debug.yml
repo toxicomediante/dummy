@@ -31,6 +31,13 @@ jobs:
       - run: node scripts/apply-android-branding.mjs
       - run: cp -R native/android-overlay/. android/
       - run: cd android && chmod +x gradlew && ./gradlew assembleDebug
+      - name: Verify packaged icon and version
+        run: |
+          APK=android/app/build/outputs/apk/debug/app-debug.apk
+          AAPT="$(find "$ANDROID_HOME/build-tools" -type f -name aapt | sort -V | tail -1)"
+          "$AAPT" dump badging "$APK" | tee /tmp/dummy-badging.txt
+          grep -q "versionCode='$((1000+GITHUB_RUN_NUMBER))'" /tmp/dummy-badging.txt
+          unzip -l "$APK" | grep 'dummy_artwork_fullbleed'
       - uses: actions/upload-artifact@v4
         with:
           name: dummy-debug-apk
@@ -44,4 +51,7 @@ jobs:
           if ! gh release view test-build >/dev/null 2>&1; then
             gh release create test-build --target main --prerelease --title "DUMMY · Test build" --notes "Primera compilación Android experimental de DUMMY · YOSE'S PROJECT."
           fi
+          VERSIONED_APK="DUMMY-${GITHUB_SHA:0:7}.apk"
+          cp DUMMY.apk "$VERSIONED_APK"
+          gh release upload test-build "$VERSIONED_APK" --clobber
           gh release upload test-build DUMMY.apk --clobber

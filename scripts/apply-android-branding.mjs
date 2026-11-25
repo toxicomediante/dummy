@@ -1,32 +1,45 @@
-import { mkdir, rm, writeFile } from 'node:fs/promises'
+import { mkdir, rm, writeFile, readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import sharp from 'sharp'
 
-const res = resolve('android/app/src/main/res')
+const main = resolve('android/app/src/main')
+const res = resolve(main, 'res')
 const source = resolve('public/branding/dummy-icon-source.png')
-const mipmap = resolve(res, 'mipmap-nodpi')
+const name = 'dummy_artwork_fullbleed'
+const densities = { mdpi: 48, hdpi: 72, xhdpi: 96, xxhdpi: 144, xxxhdpi: 192 }
 
-// Do not advertise an adaptive icon: its background is displayed as a
-// separate launcher circle. Keep the original artwork as a transparent bitmap.
-for (const dir of ['mipmap-mdpi', 'mipmap-hdpi', 'mipmap-xhdpi', 'mipmap-xxhdpi',
-  'mipmap-xxxhdpi', 'mipmap-anydpi-v26', 'mipmap-anydpi-v33', 'mipmap-nodpi']) {
+for (const dir of ['mipmap-anydpi-v26', 'mipmap-anydpi-v33', 'mipmap-nodpi']) {
   await rm(resolve(res, dir), { recursive: true, force: true })
 }
-await mkdir(mipmap, { recursive: true })
-await rm(resolve(res, 'values/dummy_icon_colors.xml'), { force: true })
-await rm(resolve(res, 'drawable-nodpi/dummy_icon_foreground.png'), { force: true })
-await rm(resolve(res, 'drawable-nodpi/dummy_icon_foreground.webp'), { force: true })
-
-const size = 512
-const artwork = await sharp(source).ensureAlpha().resize(size, size, {
-  fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 }
-}).png().toBuffer()
-const mask = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}"><circle cx="${size/2}" cy="${size/2}" r="${size/2}" fill="white"/></svg>`)
-const icon = await sharp(artwork).composite([{ input: mask, blend: 'dest-in' }]).png().toBuffer()
-const { data, info } = await sharp(icon).ensureAlpha().raw().toBuffer({ resolveWithObject: true })
-if (data[3] !== 0 || data[(info.width - 1) * 4 + 3] !== 0) {
-  throw new Error('Launcher artwork must have transparent corners')
+for (const [density, size] of Object.entries(densities)) {
+  const dir = resolve(res, 'mipmap-' + density)
+  await mkdir(dir, { recursive: true })
+  // Same full-bleed approach as the parent YOSE app. No inset artwork or circular mask.
+  await sharp(source).resize(size, size, { fit: 'cover' }).flatten({ background: '#020303' }).png().toFile(resolve(dir, name + '.png'))
+  const adaptiveSize = Math.round(size * 2.25)
+  await sharp(source).resize(adaptiveSize, adaptiveSize, { fit: 'cover' }).flatten({ background: '#020303' }).png().toFile(resolve(dir, name + '_foreground.png'))
 }
-await writeFile(resolve(mipmap, 'ic_launcher.png'), icon)
-await writeFile(resolve(mipmap, 'ic_launcher_round.png'), icon)
-console.log('DUMMY: original artwork, transparent outside, no adaptive background or extra padding.')
+const adaptive = resolve(res, 'mipmap-anydpi-v26')
+await mkdir(adaptive, { recursive: true })
+const xml = `<?xml version="1.0" encoding="utf-8"?>
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@mipmap/${name}_foreground"/>
+    <foreground android:drawable="@mipmap/${name}_foreground"/>
+</adaptive-icon>
+`
+await writeFile(resolve(adaptive, name + '.xml'), xml)
+const manifest = resolve(main, 'AndroidManifest.xml')
+const original = await readFile(manifest, 'utf8')
+const updated = original.replace(/android:icon="[^"]+"/, `android:icon="@mipmap/${name}"`)
+  .replace(/android:roundIcon="[^"]+"/, `android:roundIcon="@mipmap/${name}"`)
+if (!updated.includes(`android:icon="@mipmap/${name}"`) || updated === original) throw new Error('Icon manifest replacement failed')
+await writeFile(manifest, updated)
+const gradle = resolve('android/app/build.gradle')
+const before = await readFile(gradle, 'utf8')
+const build = Number(process.env.GITHUB_RUN_NUMBER || 2)
+if (!Number.isInteger(build) || build < 1) throw new Error('Invalid build number')
+const after = before.replace(/versionCode\s+\d+/, `versionCode ${1000 + build}`)
+  .replace(/versionName\s+"[^"]+"/, `versionName "0.1.${build}"`)
+if (after === before || !after.includes(`versionCode ${1000 + build}`)) throw new Error('Version replacement failed')
+await writeFile(gradle, after)
+console.log(`DUMMY 0.1.${build}: full-bleed artwork, new manifest icon resource, versionCode ${1000+build}.`)
