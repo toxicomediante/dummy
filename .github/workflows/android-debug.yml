@@ -6,6 +6,7 @@ on:
     branches: [main]
     paths:
       - 'native/android-overlay/**'
+      - 'scripts/apply-android-branding.mjs'
 
 permissions:
   contents: write
