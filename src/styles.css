@@ -61,3 +61,19 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;opacity:.16;ba
 .phone-surface footer{position:relative;z-index:2;text-align:center;font-size:6px;letter-spacing:2px;color:#667067;margin-top:15px}
 
 @media(max-width:390px){.phone-surface{padding-left:14px;padding-right:14px;border-radius:0;border-left:0;border-right:0}.app-shell{padding:0}.hero-copy.left{left:16px}.hero-copy.right{right:16px}.model-card{height:475px}.muscle-list>button{grid-template-columns:1.15fr .8fr 26px}.brand span{font-size:25px}.brand small{font-size:7px;letter-spacing:3.2px}}
+
+
+/* Native Android only: edge-to-edge artwork with safe interactive content. */
+html.dummy-native .app-shell { padding: 0; }
+html.dummy-native .phone-surface {
+  width: 100%;
+  min-height: 100vh;
+  min-height: 100dvh;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  padding-top: max(24px, calc(var(--dummy-safe-top, env(safe-area-inset-top, 0px)) + 8px));
+  padding-left: max(16px, var(--dummy-safe-left, env(safe-area-inset-left, 0px)));
+  padding-right: max(16px, var(--dummy-safe-right, env(safe-area-inset-right, 0px)));
+  padding-bottom: max(32px, calc(var(--dummy-safe-bottom, env(safe-area-inset-bottom, 0px)) + 8px));
+}

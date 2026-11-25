@@ -2,6 +2,10 @@ name: Android Debug APK
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'native/android-overlay/**'
 
 permissions:
   contents: write
@@ -24,6 +28,7 @@ jobs:
       - run: npx cap add android
       - run: npx cap sync android
       - run: node scripts/apply-android-branding.mjs
+      - run: cp -R native/android-overlay/. android/
       - run: cd android && chmod +x gradlew && ./gradlew assembleDebug
       - uses: actions/upload-artifact@v4
         with:
