@@ -43,3 +43,14 @@ const after = before.replace(/versionCode\s+\d+/, `versionCode ${1000 + build}`)
 if (after === before || !after.includes(`versionCode ${1000 + build}`)) throw new Error('Version replacement failed')
 await writeFile(gradle, after)
 console.log(`DUMMY 0.1.${build}: full-bleed artwork, new manifest icon resource, versionCode ${1000+build}.`)
+
+const widgetDrawable = resolve(res, 'drawable-nodpi')
+await mkdir(widgetDrawable, {recursive:true})
+const widgetSize = 512
+const widgetMask = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512"><circle cx="256" cy="256" r="256" fill="white"/></svg>')
+const widgetArt = await sharp(source).resize(widgetSize,widgetSize,{fit:'cover'}).ensureAlpha().png().toBuffer()
+await sharp(widgetArt).composite([{input:widgetMask,blend:'dest-in'}]).png().toFile(resolve(widgetDrawable,'dummy_widget_artwork.png'))
+const widgetManifest = await readFile(manifest,'utf8')
+const receivers = "<receiver android:name=\".DummySmallWidget\" android:label=\"DUMMY · 1×1\" android:exported=\"false\"><intent-filter><action android:name=\"android.appwidget.action.APPWIDGET_UPDATE\"/></intent-filter><meta-data android:name=\"android.appwidget.provider\" android:resource=\"@xml/dummy_widget_small\"/></receiver>\n<receiver android:name=\".DummyLargeWidget\" android:label=\"DUMMY · 2×2\" android:exported=\"false\"><intent-filter><action android:name=\"android.appwidget.action.APPWIDGET_UPDATE\"/></intent-filter><meta-data android:name=\"android.appwidget.provider\" android:resource=\"@xml/dummy_widget_large\"/></receiver>\n<receiver android:name=\".DummyWideWidget\" android:label=\"DUMMY · 3×3\" android:exported=\"false\"><intent-filter><action android:name=\"android.appwidget.action.APPWIDGET_UPDATE\"/></intent-filter><meta-data android:name=\"android.appwidget.provider\" android:resource=\"@xml/dummy_widget_wide\"/></receiver>"
+if (!widgetManifest.includes('</application>')) throw new Error('Missing application manifest')
+await writeFile(manifest,widgetManifest.replace('</application>',receivers+'\n</application>'))
